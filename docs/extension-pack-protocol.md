@@ -2,7 +2,7 @@
 
 Extension Pack 是一个 `.zip` 文件，用于扩展 PsychonautWiki Journal 的功能。
 
-[Get Template](https://github.com/LoliLin/journal-android-multilingual-ext_template)
+[Get Template](https://github.com/XiaoXinQwQOvO/journal-android-multilingual/tree/main/docs/VC_Demo_Extension)
 
 ## 目录结构
 

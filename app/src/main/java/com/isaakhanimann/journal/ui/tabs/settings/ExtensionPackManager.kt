@@ -185,7 +185,15 @@ object ExtensionPackLoader {
         }
     }
 
-    private fun installPackFromZip(context: Context, zipFile: File, registerName: String): String {
+    suspend fun installDownloadedPack(
+        context: Context,
+        zipFile: File,
+        expectedRegisterName: String
+    ): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        installPackFromZip(context, zipFile, expectedRegisterName)
+    }
+
+    internal fun installPackFromZip(context: Context, zipFile: File, registerName: String): String {
         val baseDir = File(context.filesDir, EXT_DIR)
         return try {
             val targetDir = File(baseDir, registerName)
@@ -303,7 +311,7 @@ object ExtensionPackLoader {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExtensionPackScreen() {
+fun ExtensionPackScreen(onOpenStore: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var refreshKey by remember { mutableStateOf(0) }
@@ -335,6 +343,9 @@ fun ExtensionPackScreen() {
                 title = { Text(i18n("settings_extension_pack")) },
 
                 actions = {
+                    IconButton(onClick = onOpenStore) {
+                        Icon(Icons.Outlined.Storefront, "Extension store")
+                    }
                     IconButton(onClick = { importLauncher.launch(arrayOf("application/zip")) }) {
                         Icon(Icons.Outlined.FileDownload, "Import")
                     }

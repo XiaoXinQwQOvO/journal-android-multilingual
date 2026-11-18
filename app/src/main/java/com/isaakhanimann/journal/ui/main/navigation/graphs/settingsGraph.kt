@@ -25,17 +25,21 @@ import com.isaakhanimann.journal.ui.main.navigation.composableWithTransitions
 import com.isaakhanimann.journal.ui.main.navigation.routers.ArgumentRouter
 import com.isaakhanimann.journal.ui.main.navigation.routers.NoArgumentRouter
 import com.isaakhanimann.journal.ui.main.navigation.routers.TabRouter
+import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToAccount
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToComboSettings
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToCustomUnits
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToDonate
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToEditCustomUnit
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToExtensionPack
+import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToExtensionStore
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToFAQ
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToIconPicker
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToPreferences
 import com.isaakhanimann.journal.ui.main.navigation.routers.navigateToSubstanceColors
+import com.isaakhanimann.journal.ui.tabs.settings.AccountScreen
 import com.isaakhanimann.journal.ui.tabs.settings.DonateScreen
 import com.isaakhanimann.journal.ui.tabs.settings.ExtensionPackScreen
+import com.isaakhanimann.journal.ui.tabs.settings.ExtensionStoreScreen
 import com.isaakhanimann.journal.ui.tabs.settings.FAQScreen
 import com.isaakhanimann.journal.ui.tabs.settings.IconPickerScreen
 import com.isaakhanimann.journal.ui.tabs.settings.PreferencesScreen
@@ -62,7 +66,9 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 navigateToDonate = navController::navigateToDonate,
                 navigateToExtensionPack = navController::navigateToExtensionPack,
                 navigateToIconPicker = navController::navigateToIconPicker,
-                navigateToPreferences = navController::navigateToPreferences
+                navigateToPreferences = navController::navigateToPreferences,
+                navigateToAccount = navController::navigateToAccount,
+                navigateToExtensionStore = navController::navigateToExtensionStore
             )
         }
         composableWithTransitions(NoArgumentRouter.FAQRouter.route) { FAQScreen() }
@@ -77,7 +83,16 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
             IconPickerScreen()
         }
         composableWithTransitions(NoArgumentRouter.ExtensionPackRouter.route) {
-            ExtensionPackScreen()
+            ExtensionPackScreen(onOpenStore = navController::navigateToExtensionStore)
+        }
+        composableWithTransitions(NoArgumentRouter.ExtensionStoreRouter.route) {
+            ExtensionStoreScreen(
+                navigateBack = navController::popBackStack,
+                navigateToAccount = navController::navigateToAccount
+            )
+        }
+        composableWithTransitions(NoArgumentRouter.AccountRouter.route) {
+            AccountScreen(navigateBack = navController::popBackStack)
         }
         composableWithTransitions(NoArgumentRouter.CombinationSettingsRouter.route) {
             CombinationSettingsScreen()

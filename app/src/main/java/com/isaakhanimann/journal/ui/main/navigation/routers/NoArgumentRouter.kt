@@ -31,6 +31,8 @@ sealed class NoArgumentRouter(val route: String) {
     object FAQRouter : NoArgumentRouter(route = "faqRoute")
     object IconPickerRouter : NoArgumentRouter(route = "iconPicker")
     object ExtensionPackRouter : NoArgumentRouter(route = "extensionPack")
+    object ExtensionStoreRouter : NoArgumentRouter(route = "extensionStore")
+    object AccountRouter : NoArgumentRouter(route = "account")
     object DonateRouter : NoArgumentRouter(route = "donate")
     object ExplainTimelineOnSearchTabRouter : NoArgumentRouter(route = "explainTimelineOnSearchTab")
     object ExplainTimelineOnJournalTabRouter :
@@ -116,6 +118,14 @@ fun NavController.navigateToFAQ() {
 
 fun NavController.navigateToExtensionPack() {
     navigate(NoArgumentRouter.ExtensionPackRouter.route)
+}
+
+fun NavController.navigateToExtensionStore() {
+    navigate(NoArgumentRouter.ExtensionStoreRouter.route)
+}
+
+fun NavController.navigateToAccount() {
+    navigate(NoArgumentRouter.AccountRouter.route)
 }
 
 fun NavController.navigateToIconPicker() {

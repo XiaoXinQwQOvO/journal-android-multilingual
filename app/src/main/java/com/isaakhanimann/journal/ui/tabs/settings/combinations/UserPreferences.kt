@@ -24,6 +24,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.isaakhanimann.journal.data.account.AccountSession
 import com.isaakhanimann.journal.data.substances.AdministrationRoute
 import com.isaakhanimann.journal.ui.tabs.journal.experience.components.SavedTimeDisplayOption
 import com.isaakhanimann.journal.ui.utils.DateLocaleOption
@@ -60,7 +61,69 @@ class UserPreferences @Inject constructor(private val dataStore: DataStore<Prefe
         val KEY_USE_24_HOUR_CLOCK = booleanPreferencesKey("key_use_24_hour_clock")
         val KEY_STATS_BY_INGESTION_TIME = booleanPreferencesKey("key_stats_by_ingestion_time")
         val KEY_DATE_LOCALE_OPTION = stringPreferencesKey("key_date_locale_option")
+        val KEY_AUTH_TOKEN = stringPreferencesKey("key_auth_token")
+        val KEY_ACCOUNT_USER_ID = longPreferencesKey("key_account_user_id")
+        val KEY_ACCOUNT_USERNAME = stringPreferencesKey("key_account_username")
+        val KEY_ACCOUNT_AVATAR_SHA = stringPreferencesKey("key_account_avatar_sha")
     }
+
+    suspend fun saveSession(token: String, userId: Long, username: String, avatarSha: String?) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.KEY_AUTH_TOKEN] = token
+            preferences[PreferencesKeys.KEY_ACCOUNT_USER_ID] = userId
+            preferences[PreferencesKeys.KEY_ACCOUNT_USERNAME] = username
+            if (avatarSha == null) {
+                preferences.remove(PreferencesKeys.KEY_ACCOUNT_AVATAR_SHA)
+            } else {
+                preferences[PreferencesKeys.KEY_ACCOUNT_AVATAR_SHA] = avatarSha
+            }
+        }
+    }
+
+    suspend fun clearSession() {
+        dataStore.edit { preferences ->
+            preferences.remove(PreferencesKeys.KEY_AUTH_TOKEN)
+            preferences.remove(PreferencesKeys.KEY_ACCOUNT_USER_ID)
+            preferences.remove(PreferencesKeys.KEY_ACCOUNT_USERNAME)
+            preferences.remove(PreferencesKeys.KEY_ACCOUNT_AVATAR_SHA)
+        }
+    }
+
+    suspend fun updateAccountUsername(username: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.KEY_ACCOUNT_USERNAME] = username
+        }
+    }
+
+    suspend fun updateAccountAvatarSha(avatarSha: String?) {
+        dataStore.edit { preferences ->
+            if (avatarSha == null) {
+                preferences.remove(PreferencesKeys.KEY_ACCOUNT_AVATAR_SHA)
+            } else {
+                preferences[PreferencesKeys.KEY_ACCOUNT_AVATAR_SHA] = avatarSha
+            }
+        }
+    }
+
+    val authTokenFlow: Flow<String?> = dataStore.data
+        .map { preferences -> preferences[PreferencesKeys.KEY_AUTH_TOKEN] }
+
+    val accountSessionFlow: Flow<AccountSession?> = dataStore.data
+        .map { preferences ->
+            val token = preferences[PreferencesKeys.KEY_AUTH_TOKEN]
+            val userId = preferences[PreferencesKeys.KEY_ACCOUNT_USER_ID]
+            val username = preferences[PreferencesKeys.KEY_ACCOUNT_USERNAME]
+            if (token.isNullOrBlank() || userId == null || username.isNullOrBlank()) {
+                null
+            } else {
+                AccountSession(
+                    token = token,
+                    userId = userId,
+                    username = username,
+                    avatarSha = preferences[PreferencesKeys.KEY_ACCOUNT_AVATAR_SHA]
+                )
+            }
+        }
 
     suspend fun saveTimeDisplayOption(value: SavedTimeDisplayOption) {
         dataStore.edit { preferences ->

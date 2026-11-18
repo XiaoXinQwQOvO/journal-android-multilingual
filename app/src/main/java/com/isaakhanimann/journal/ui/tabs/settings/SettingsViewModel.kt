@@ -24,20 +24,20 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.isaakhanimann.journal.data.journal.JournalExportService
+import com.isaakhanimann.journal.data.network.JournalSyncRepository
 import com.isaakhanimann.journal.data.room.experiences.ExperienceRepository
+import com.isaakhanimann.journal.localization.I18n
 import com.isaakhanimann.journal.ui.notifications.Notifications
 import com.isaakhanimann.journal.ui.tabs.settings.combinations.UserPreferences
 import com.isaakhanimann.journal.ui.utils.DateLocaleOption
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.FileOutputStream
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -45,7 +45,9 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val experienceRepository: ExperienceRepository,
     private val fileSystemConnection: FileSystemConnection,
-    private val userPreferences: UserPreferences
+    private val userPreferences: UserPreferences,
+    private val journalExportService: JournalExportService,
+    private val journalSyncRepository: JournalSyncRepository
 ) : ViewModel() {
 
     fun saveDosageDotsAreHidden(value: Boolean) = viewModelScope.launch {
@@ -261,21 +263,7 @@ class SettingsViewModel @Inject constructor(
                     } else {
                         bytes.toString(Charsets.UTF_8)
                     }
-                    val json = Json { ignoreUnknownKeys = true }
-                    val journalExport = json.decodeFromString<JournalExport>(text)
-                    // Decode all avatars up front: an invalid base64 payload aborts the
-                    // import before the database is replaced, leaving no partial state.
-                    val decodedAvatars = journalExport.avatars.map { (userName, base64) ->
-                        userName to java.util.Base64.getDecoder().decode(base64)
-                    }
-                    experienceRepository.replaceEverything(journalExport)
-                    decodedAvatars.forEach { (userName, decoded) ->
-                        try {
-                            val avatarFile = AvatarUtil.getAvatarFile(context, userName)
-                            avatarFile.parentFile?.mkdirs()
-                            FileOutputStream(avatarFile).use { it.write(decoded) }
-                        } catch (_: Exception) { }
-                    }
+                    journalExportService.applyText(text)
                     snackbarHostState.showSnackbar(
                         message = "Import successful",
                         duration = SnackbarDuration.Short
@@ -292,94 +280,9 @@ class SettingsViewModel @Inject constructor(
 
     fun exportFile(uri: Uri, password: String? = null) {
         viewModelScope.launch {
-            val experiencesWithIngestionsAndRatings =
-                experienceRepository.getAllExperiencesWithIngestionsTimedNotesAndRatingsSorted()
-            val experiencesSerializable = experiencesWithIngestionsAndRatings.map {
-                val location = it.experience.location
-                return@map ExperienceSerializable(
-                    title = it.experience.title,
-                    text = it.experience.text,
-                    creationDate = it.experience.creationDate,
-                    sortDate = it.experience.sortDate,
-                    isFavorite = it.experience.isFavorite,
-                    ingestions = it.ingestions.map { ingestion ->
-                        IngestionSerializable(
-                            substanceName = ingestion.substanceName,
-                            time = ingestion.time,
-                            endTime = ingestion.endTime,
-                            creationDate = ingestion.creationDate,
-                            administrationRoute = ingestion.administrationRoute,
-                            dose = ingestion.dose,
-                            estimatedDoseStandardDeviation = ingestion.estimatedDoseStandardDeviation,
-                            isDoseAnEstimate = ingestion.isDoseAnEstimate,
-                            units = ingestion.units,
-                            notes = ingestion.notes,
-                            stomachFullness = ingestion.stomachFullness,
-                            consumerName = ingestion.consumerName,
-                            customUnitId = ingestion.customUnitId
-                        )
-                    },
-                    location = if (location != null) {
-                        LocationSerializable(
-                            name = location.name,
-                            latitude = location.latitude,
-                            longitude = location.longitude
-                        )
-                    } else {
-                        null
-                    },
-                    ratings = it.ratings.map { rating ->
-                        RatingSerializable(
-                            option = rating.option,
-                            time = rating.time,
-                            creationDate = rating.creationDate
-                        )
-                    },
-                    timedNotes = it.timedNotes.map { timedNote ->
-                        TimedNoteSerializable(
-                            creationDate = timedNote.creationDate,
-                            time = timedNote.time,
-                            note = timedNote.note,
-                            color = timedNote.color,
-                            isPartOfTimeline = timedNote.isPartOfTimeline
-                        )
-                    }
-                )
-            }
-            val customUnitsSerializable = experienceRepository.getAllCustomUnitsSorted().map {
-                CustomUnitSerializable(
-                    id = it.id,
-                    substanceName = it.substanceName,
-                    name = it.name,
-                    creationDate = it.creationDate,
-                    administrationRoute = it.administrationRoute,
-                    dose = it.dose,
-                    estimatedDoseStandardDeviation = it.estimatedDoseStandardDeviation,
-                    isEstimate = it.isEstimate,
-                    isArchived = it.isArchived,
-                    unit = it.unit,
-                    unitPlural = it.unitPlural,
-                    originalUnit = it.originalUnit,
-                    note = it.note
-                )
-            }
-            val ownerUserName = userPreferences.ownerUserNameFlow.firstOrNull() ?: "You"
-            val avatarFile = AvatarUtil.getUserAvatar(context, ownerUserName)
-            val avatars = if (avatarFile != null && avatarFile.exists()) {
-                val bytes = avatarFile.readBytes()
-                mapOf(ownerUserName to java.util.Base64.getEncoder().encodeToString(bytes))
-            } else {
-                emptyMap()
-            }
-            val journalExport = JournalExport(
-                experiences = experiencesSerializable,
-                substanceCompanions = experienceRepository.getAllSubstanceCompanions(),
-                customSubstances = experienceRepository.getAllCustomSubstances(),
-                customUnits = customUnitsSerializable,
-                avatars = avatars
-            )
+            val journalExport = journalExportService.build()
             try {
-                val jsonList = Json.encodeToString(journalExport)
+                val jsonList = journalExportService.encode(journalExport)
                 if (password == null) {
                     fileSystemConnection.saveTextInUri(uri, text = jsonList)
                 } else {
@@ -393,6 +296,71 @@ class SettingsViewModel @Inject constructor(
             } catch (_: Exception) {
                 snackbarHostState.showSnackbar(
                     message = "Export failed",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
+
+    val accountSessionFlow = userPreferences.accountSessionFlow.stateIn(
+        initialValue = null,
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000)
+    )
+
+    fun uploadJournal() {
+        viewModelScope.launch {
+            if (userPreferences.authTokenFlow.firstOrNull() == null) {
+                snackbarHostState.showSnackbar(
+                    message = I18n.translate(context, "sync_not_logged_in"),
+                    duration = SnackbarDuration.Short
+                )
+                return@launch
+            }
+            try {
+                val journalExport = journalExportService.build()
+                journalSyncRepository.upload(journalExportService.encode(journalExport))
+                snackbarHostState.showSnackbar(
+                    message = I18n.translate(context, "sync_upload_success"),
+                    duration = SnackbarDuration.Short
+                )
+            } catch (e: Exception) {
+                snackbarHostState.showSnackbar(
+                    message = e.localizedMessage
+                        ?: I18n.translate(context, "sync_failed"),
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
+
+    fun downloadJournal() {
+        viewModelScope.launch {
+            if (userPreferences.authTokenFlow.firstOrNull() == null) {
+                snackbarHostState.showSnackbar(
+                    message = I18n.translate(context, "sync_not_logged_in"),
+                    duration = SnackbarDuration.Short
+                )
+                return@launch
+            }
+            try {
+                val snapshot = journalSyncRepository.download()
+                if (snapshot == null) {
+                    snackbarHostState.showSnackbar(
+                        message = I18n.translate(context, "sync_no_server_data"),
+                        duration = SnackbarDuration.Short
+                    )
+                    return@launch
+                }
+                journalExportService.applyText(snapshot.payload)
+                snackbarHostState.showSnackbar(
+                    message = I18n.translate(context, "sync_download_success"),
+                    duration = SnackbarDuration.Short
+                )
+            } catch (e: Exception) {
+                snackbarHostState.showSnackbar(
+                    message = e.localizedMessage
+                        ?: I18n.translate(context, "sync_failed"),
                     duration = SnackbarDuration.Short
                 )
             }

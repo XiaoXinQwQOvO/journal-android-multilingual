@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CurrencyBitcoin
+import androidx.compose.material.icons.outlined.CurrencyExchange
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -71,15 +71,15 @@ fun DonateScreen() {
             val clipboard = LocalClipboard.current
             val scope = rememberCoroutineScope()
 
-            val btcAddress = "bc1p7rm6akzl99j6jmht68f962fa4403n6dshlmu8sqpw8n3j6dt92dshr8qs3"
+            val usdtTrc20Address = "TQ6jGML67zoGzhGLPQH8QawvNSDiWtTKaS"
 
             val copyTip = i18n("copied_to_clipboard")
             DonateButton(
-                imageVector = Icons.Outlined.CurrencyBitcoin,
-                text = i18n("donate_bitcoin")
+                imageVector = Icons.Outlined.CurrencyExchange,
+                text = i18n("donate_usdt_trc20")
             ) {
                 scope.launch {
-                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", btcAddress)))
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", usdtTrc20Address)))
                     Toast.makeText(context, copyTip, Toast.LENGTH_SHORT).show()
                 }
             }

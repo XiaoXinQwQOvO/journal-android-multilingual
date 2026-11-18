@@ -1,0 +1,37 @@
+[package]
+name = "journal-server"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "Account, journal sync and extension pack server for PsychonautWiki Journal (multilingual fork)"
+license = "GPL-3.0-only"
+
+[dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tower-http = { version = "0.6", features = ["trace"] }
+
+sqlx = { version = "0.8", features = ["mysql", "runtime-tokio-rustls", "chrono", "uuid", "migrate"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+argon2 = "0.5"
+jsonwebtoken = "9"
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+subtle = "2"
+thiserror = "2"
+url = "2"
+
+# 0.5.5 is the last 0.5.x release; the Webauthn API changed across 0.5.x patch
+# releases, so the exact version is pinned deliberately.
+webauthn-rs = { version = "=0.5.5", features = ["danger-allow-state-serialisation"] }
+
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+zip = { version = "=2.6.1", default-features = false, features = ["deflate"] }

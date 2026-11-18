@@ -40,6 +40,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ContactSupport
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Extension
@@ -49,6 +52,7 @@ import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.QuestionAnswer
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -116,9 +120,12 @@ fun SettingsScreen(
     navigateToDonate: () -> Unit,
     navigateToIconPicker: () -> Unit = {},
     navigateToExtensionPack: () -> Unit = {},
-    navigateToPreferences: () -> Unit = {}
+    navigateToPreferences: () -> Unit = {},
+    navigateToAccount: () -> Unit = {},
+    navigateToExtensionStore: () -> Unit = {}
 ) {
     val ownerUserName = viewModel.ownerUserNameFlow.collectAsState(initial = "You").value ?: "You"
+    val accountSession = viewModel.accountSessionFlow.collectAsState(initial = null).value
     SettingsScreen(
         navigateToFAQ = navigateToFAQ,
         navigateToComboSettings = navigateToComboSettings,
@@ -136,6 +143,12 @@ fun SettingsScreen(
         ownerUserName = ownerUserName,
         saveOwnerUserName = viewModel::saveOwnerUserName,
         achievements = viewModel.achievementsFlow.collectAsState().value,
+        navigateToAccount = navigateToAccount,
+        navigateToExtensionStore = navigateToExtensionStore,
+        isLoggedIn = accountSession != null,
+        accountUsername = accountSession?.username,
+        uploadJournal = viewModel::uploadJournal,
+        downloadJournal = viewModel::downloadJournal
     )
 }
 
@@ -158,6 +171,12 @@ fun SettingsScreen(
     ownerUserName: String = "You",
     achievements: List<String> = emptyList(),
     saveOwnerUserName: (String?) -> Unit,
+    navigateToAccount: () -> Unit = {},
+    navigateToExtensionStore: () -> Unit = {},
+    isLoggedIn: Boolean = false,
+    accountUsername: String? = null,
+    uploadJournal: () -> Unit = {},
+    downloadJournal: () -> Unit = {}
 ) {
     val topBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -186,6 +205,15 @@ fun SettingsScreen(
                 onUserNameChanged = saveOwnerUserName,
                 achievements = achievements
             )
+
+            CardWithTitle(title = i18n("settings_account"), innerPaddingHorizontal = 0.dp) {
+                SettingsButton(
+                    imageVector = Icons.Outlined.AccountCircle,
+                    text = accountUsername ?: i18n("account_login")
+                ) {
+                    navigateToAccount()
+                }
+            }
 
             CardWithTitle(title = i18n("settings_ui"), innerPaddingHorizontal = 0.dp) {
                 SettingsButton(
@@ -393,6 +421,55 @@ fun SettingsScreen(
                     )
                 }
                 HorizontalDivider()
+                var isShowingDownloadConfirm by remember { mutableStateOf(false) }
+                val scopeSync = rememberCoroutineScope()
+                val notLoggedInMessage = i18n("sync_not_logged_in")
+                SettingsButton(
+                    imageVector = Icons.Outlined.CloudUpload,
+                    text = i18n("settings_upload_data")
+                ) {
+                    if (isLoggedIn) {
+                        uploadJournal()
+                    } else {
+                        scopeSync.launch { snackbarHostState.showSnackbar(notLoggedInMessage) }
+                        navigateToAccount()
+                    }
+                }
+                HorizontalDivider()
+                SettingsButton(
+                    imageVector = Icons.Outlined.CloudDownload,
+                    text = i18n("settings_download_data")
+                ) {
+                    if (isLoggedIn) {
+                        isShowingDownloadConfirm = true
+                    } else {
+                        scopeSync.launch { snackbarHostState.showSnackbar(notLoggedInMessage) }
+                        navigateToAccount()
+                    }
+                }
+                AnimatedVisibility(visible = isShowingDownloadConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { isShowingDownloadConfirm = false },
+                        title = { Text(i18n("sync_download_confirm_title")) },
+                        text = { Text(i18n("sync_download_confirm_message")) },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    isShowingDownloadConfirm = false
+                                    downloadJournal()
+                                }
+                            ) {
+                                Text(i18n("common_confirm"))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { isShowingDownloadConfirm = false }) {
+                                Text(i18n("common_cancel"))
+                            }
+                        }
+                    )
+                }
+                HorizontalDivider()
                 var isShowingDeleteDialog by remember { mutableStateOf(false) }
                 var deleteConfirmText by remember { mutableStateOf("") }
                 
@@ -465,6 +542,13 @@ fun SettingsScreen(
                 ) {
                     navigateToExtensionPack()
                 }
+                HorizontalDivider()
+                SettingsButton(
+                    imageVector = Icons.Outlined.Storefront,
+                    text = i18n("settings_extension_store")
+                ) {
+                    navigateToExtensionStore()
+                }
             }
 
             val openLink = rememberOpenLink()
@@ -482,7 +566,7 @@ fun SettingsScreen(
                     text = i18n("settings_feedback_button")
                 ) {
                     openLink(
-                        "https://github.com/LoliLin/journal-android-multilingual/issues"
+                        "https://github.com/XiaoXinQwQOvO/journal-android-multilingual/issues"
                     )
                 }
                 HorizontalDivider()
@@ -498,7 +582,7 @@ fun SettingsScreen(
                     imageVector = Icons.Outlined.Code,
                     text = i18n("settings_source_code")
                 ) {
-                    openLink("https://github.com/LoliLin/journal-android-multilingual")
+                    openLink("https://github.com/XiaoXinQwQOvO/journal-android-multilingual")
                 }
                 HorizontalDivider()
                 val context = LocalContext.current
@@ -530,7 +614,7 @@ fun SettingsScreen(
 }
 
 
-const val SHARE_APP_URL = "https://github.com/LoliLin/journal-android-multilingual"
+const val SHARE_APP_URL = "https://github.com/XiaoXinQwQOvO/journal-android-multilingual"
 
 @Composable
 fun SettingsButton(imageVector: ImageVector, text: String, onClick: () -> Unit) {
