@@ -1,3 +1,7 @@
 /target
 /data
-.env
+/.env
+/scripts/.pw_translation_cache.json
+/scripts/.pw_state
+/dist
+__pycache__/

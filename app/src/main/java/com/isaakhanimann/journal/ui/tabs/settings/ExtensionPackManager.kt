@@ -79,7 +79,7 @@ object ExtensionPackLoader {
             updateJsonLink = json.getString("updateJsonLink"),
             versionName = json.getString("versionName"),
             versionCode = json.getInt("versionCode"),
-            iconPath = json.optString("icon")
+            iconPath = json.optString("icon").takeIf { it.isNotBlank() }
         )
     }
 

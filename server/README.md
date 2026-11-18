@@ -308,6 +308,68 @@ DATA_DIR/
 Only the current version is kept; older files are removed after a successful
 update. Back up `DATA_DIR` and the MySQL database together.
 
+## Scheduled substance data sync
+
+`server/scripts/pw_sync.py` refreshes substance data from PsychonautWiki's
+GraphQL API (`https://api.psychonautwiki.org/`), keeps the local text unchanged
+unless the API provides a replacement, translates changed fields with the
+configured OpenAI-compatible endpoint, and builds an extension pack that the
+client installs through the extension store.
+
+The translation endpoint defaults to `http://60.204.204.179:10087/v1` with model
+`deepseek-v4.1-flash-1017`. It requires an API key.
+
+```bash
+export ASSETS_DIR=/opt/journal-repo/app/src/main/assets/substances
+export PW_TRANSLATE_API_KEY='<key>'
+export ADMIN_TOKEN='<same value as in the server environment>'
+
+# Dry run: build dist/pw_core_data_<version>.zip without publishing.
+./server/scripts/update-substances.sh
+
+# Publish the pack; the job must also pass --include-new to add substances that
+# are not present in the bundled assets yet.
+./server/scripts/update-substances.sh --include-new --publish https://journal.xiaoxinww.xin
+```
+
+Useful flags:
+
+| Flag | Effect |
+|---|---|
+| `--no-translate` | Update English/base data only (no API key needed) |
+| `--include-new` | Add API substances missing from the local assets |
+| `--limit N` | Process only the first N API substances (smoke testing) |
+| `--out-dir DIR` | Where to write the zip (default `dist/`) |
+| `--state-dir DIR` | Snapshot used to avoid republishing unchanged data (default `scripts/.pw_state`) |
+| `--advance-state` | Mark the generated pack as synced when uploading it manually |
+| `--publish URL` | Upload with `X-Admin-Token` and advance the state |
+
+The pack is named `pw_core_data`; clients see it in the extension store and the
+loader merges `substances/root`, `substances/en_us`, `substances/zh_cn` and
+`substances/zh_tw` over the bundled data. Long-form text such as `summary`,
+`generalRisks` and `saferUse` is preserved for existing substances because the
+API's summary field still contains wiki leftovers; review generated diffs before
+enabling fully automatic publishing. `--include-new` is best used with review:
+upstream records have been observed carrying another substance's aliases and
+class, so the script only trusts aliases that contain the record's own name and
+leaves new entries uncategorised.
+
+Weekly cron example (run from a repository checkout and update it first):
+
+```cron
+0 4 * * 1 cd /opt/journal-repo && git pull --ff-only && \
+  ASSETS_DIR=/opt/journal-repo/app/src/main/assets/substances \
+  PW_TRANSLATE_API_KEY=... ADMIN_TOKEN=... \
+  ./server/scripts/update-substances.sh --include-new --publish https://journal.xiaoxinww.xin
+```
+
+The translation cache lives in `server/scripts/.pw_translation_cache.json` and
+is gitignored; keep it between runs so unchanged text is not re-translated. A
+state snapshot in `server/scripts/.pw_state` (also gitignored) records the last
+published data so an unchanged weekly run produces no new pack; state is only
+advanced after a successful publish (or with `--advance-state` for manual
+uploads).
+
 ## API contract summary
 
 - Authentication: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`.
