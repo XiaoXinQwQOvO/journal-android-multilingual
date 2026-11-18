@@ -28,6 +28,8 @@ url = "2"
 
 # 0.5.5 is the last 0.5.x release; the Webauthn API changed across 0.5.x patch
 # releases, so the exact version is pinned deliberately.
+# webauthn-rs links against OpenSSL; the cross build points OPENSSL_DIR at a
+# musl static build, while Linux builds can use the system libssl-dev.
 webauthn-rs = { version = "=0.5.5", features = ["danger-allow-state-serialisation"] }
 
 chrono = { version = "0.4", features = ["serde"] }

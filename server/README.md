@@ -16,6 +16,7 @@ verification.
 - Rust 1.88 or newer (webauthn-rs 0.5.5 requires 1.88).
 - OpenSSL development files on the build machine (`libssl-dev` /
   `openssl-devel`). webauthn-rs links against OpenSSL.
+- Python 3.8+ for the optional scheduled substance sync script.
 - For serving the built binary: glibc and the OpenSSL 3 runtime
   (`libssl3`) of a compatible distribution.
 
@@ -115,6 +116,28 @@ OpenSSL headers and libraries for the target. Set `OPENSSL_DIR` to the target
 OpenSSL prefix and `CC_x86_64_unknown_linux_gnu` /
 `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER` to the cross compiler. Building
 inside WSL avoids this and is recommended.
+
+### Cross-compiling a static Linux binary from Windows
+
+The following produces a fully static musl binary (no libssl/glibc on the
+server) and needs no WSL:
+
+```bash
+rustup target add x86_64-unknown-linux-musl
+cargo install cargo-zigbuild
+
+# Alpine's musl OpenSSL static libraries
+mkdir -p /tmp/openssl-musl && cd /tmp/openssl-musl
+curl -LO https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/openssl-dev-3.5.9-r0.apk
+curl -LO https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/openssl-libs-static-3.5.9-r0.apk
+tar -xzf openssl-dev-3.5.9-r0.apk && tar -xzf openssl-libs-static-3.5.9-r0.apk
+cd /path/to/repo/server
+OPENSSL_DIR=/tmp/openssl-musl/usr OPENSSL_STATIC=1 \
+  cargo zigbuild --release --target x86_64-unknown-linux-musl
+```
+
+The result is `target/x86_64-unknown-linux-musl/release/journal-server`, an ELF
+x86-64 statically linked executable. Zig must be installed and on `PATH`.
 
 Copy the binary to the server, for example `/opt/journal-server/journal-server`.
 Keep `migrations/` in the source tree only for building: migrations are embedded
@@ -317,7 +340,10 @@ configured OpenAI-compatible endpoint, and builds an extension pack that the
 client installs through the extension store.
 
 The translation endpoint defaults to `http://60.204.204.179:10087/v1` with model
-`deepseek-v4.1-flash-1017`. It requires an API key.
+`deepseek-v4.1-flash-1017`. It requires an API key, which belongs in the
+`PW_TRANSLATE_API_KEY` line of `server/.env`; the wrapper sources that file so
+the same file also supplies `ADMIN_TOKEN` for uploads. The server process ignores
+the `PW_TRANSLATE_*` variables.
 
 ```bash
 export ASSETS_DIR=/opt/journal-repo/app/src/main/assets/substances
