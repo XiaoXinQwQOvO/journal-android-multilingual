@@ -5,7 +5,9 @@
 
 package com.isaakhanimann.journal.ui.tabs.settings
 
+import android.content.ClipData
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,16 +47,20 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -62,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.isaakhanimann.journal.localization.i18n
+import kotlinx.coroutines.launch
 
 private enum class AuthMode { LOGIN, REGISTER }
 
@@ -73,7 +80,135 @@ fun AccountScreen(
 ) {
     val session = viewModel.accountSessionFlow.collectAsState(initial = null).value
     val isBusy = viewModel.isBusyFlow.collectAsState().value
+    val pendingTotp = viewModel.pendingTotpTokenFlow.collectAsState().value
+    val totpEnabled = viewModel.totpEnabledFlow.collectAsState().value
+    val totpSetup = viewModel.totpSetupFlow.collectAsState().value
     val activityContext = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val copiedMessage = i18n("copied_to_clipboard")
+    var showDisableTotp by remember { mutableStateOf(false) }
+
+    LaunchedEffect(session?.username) {
+        if (session != null) viewModel.refreshProfile()
+    }
+
+    if (pendingTotp != null) {
+        var code by remember(pendingTotp) { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = viewModel::cancelTotp,
+            title = { Text(i18n("account_2fa_required")) },
+            text = {
+                Column {
+                    Text(i18n("account_2fa_enter_code"))
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = code,
+                        onValueChange = { code = it.filter(Char::isDigit).take(6) },
+                        label = { Text(i18n("account_2fa_code")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = code.length == 6 && !isBusy,
+                    onClick = { viewModel.verifyTotp(code) }
+                ) {
+                    Text(i18n("account_2fa_verify_action"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelTotp) {
+                    Text(i18n("common_cancel"))
+                }
+            }
+        )
+    }
+
+    if (totpSetup != null) {
+        var code by remember(totpSetup) { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = viewModel::cancelTotpSetup,
+            title = { Text(i18n("account_2fa_setup_title")) },
+            text = {
+                Column {
+                    Text(i18n("account_2fa_setup_hint"))
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = totpSetup.secret,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    TextButton(onClick = {
+                        scope.launch {
+                            clipboard.setClipEntry(
+                                ClipEntry(ClipData.newPlainText("", totpSetup.secret))
+                            )
+                            Toast.makeText(activityContext, copiedMessage, Toast.LENGTH_SHORT)
+                                .show()
+                        }
+                    }) {
+                        Text(i18n("account_2fa_copy_secret"))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = code,
+                        onValueChange = { code = it.filter(Char::isDigit).take(6) },
+                        label = { Text(i18n("account_2fa_code")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = code.length == 6 && !isBusy,
+                    onClick = { viewModel.confirmTotpEnable(code) }
+                ) {
+                    Text(i18n("account_2fa_enable_action"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelTotpSetup) {
+                    Text(i18n("common_cancel"))
+                }
+            }
+        )
+    }
+
+    if (showDisableTotp) {
+        var code by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showDisableTotp = false },
+            title = { Text(i18n("account_2fa_disable_title")) },
+            text = {
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.filter(Char::isDigit).take(6) },
+                    label = { Text(i18n("account_2fa_code")) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = code.length == 6 && !isBusy,
+                    onClick = {
+                        showDisableTotp = false
+                        viewModel.disableTotp(code)
+                    }
+                ) {
+                    Text(i18n("account_2fa_disable_action"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisableTotp = false }) {
+                    Text(i18n("common_cancel"))
+                }
+            }
+        )
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(viewModel.snackbarHostState) },
@@ -102,9 +237,12 @@ fun AccountScreen(
                 username = session.username,
                 avatarSha = session.avatarSha,
                 isBusy = isBusy,
+                totpEnabled = totpEnabled,
                 onChangeUsername = { viewModel.updateUsername(it, session.username) },
                 onUploadAvatar = { uri -> viewModel.uploadAvatar(activityContext, uri) },
                 onAddPasskey = { viewModel.addPasskey(it) },
+                onStartTotpSetup = viewModel::startTotpSetup,
+                onDisableTotp = { showDisableTotp = true },
                 onLogout = viewModel::logout
             )
         }
@@ -214,9 +352,12 @@ private fun ProfileContent(
     username: String,
     avatarSha: String?,
     isBusy: Boolean,
+    totpEnabled: Boolean,
     onChangeUsername: (String) -> Unit,
     onUploadAvatar: (android.net.Uri) -> Unit,
     onAddPasskey: (android.content.Context) -> Unit,
+    onStartTotpSetup: () -> Unit,
+    onDisableTotp: () -> Unit,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -326,6 +467,29 @@ private fun ProfileContent(
                 if (isBusy) {
                     Spacer(Modifier.height(8.dp))
                     CircularProgressIndicator(Modifier.size(28.dp))
+                }
+            }
+        }
+
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(i18n("account_2fa"), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (totpEnabled) i18n("account_2fa_on") else i18n("account_2fa_off"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = if (totpEnabled) onDisableTotp else onStartTotpSetup,
+                    enabled = !isBusy
+                ) {
+                    Text(
+                        if (totpEnabled) i18n("account_2fa_disable_action")
+                        else i18n("account_2fa_enable_action")
+                    )
                 }
             }
         }

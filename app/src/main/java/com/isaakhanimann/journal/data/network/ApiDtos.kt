@@ -13,13 +13,44 @@ data class UserDto(
     val id: Long,
     val username: String,
     val avatarUrl: String? = null,
-    val avatarSha256: String? = null
+    val avatarSha256: String? = null,
+    val totpEnabled: Boolean = false
 )
 
 @Serializable
 data class AuthResponse(
     val token: String,
     val user: UserDto
+)
+
+@Serializable
+data class LoginResponse(
+    val token: String? = null,
+    val user: UserDto? = null,
+    val requiresTotp: Boolean = false,
+    val totpToken: String? = null
+)
+
+@Serializable
+data class TotpVerifyRequest(
+    val totpToken: String,
+    val code: String
+)
+
+@Serializable
+data class TotpCodeRequest(
+    val code: String
+)
+
+@Serializable
+data class TotpSetupDto(
+    val secret: String,
+    val otpauthUrl: String
+)
+
+@Serializable
+data class TotpStateDto(
+    val totpEnabled: Boolean
 )
 
 @Serializable

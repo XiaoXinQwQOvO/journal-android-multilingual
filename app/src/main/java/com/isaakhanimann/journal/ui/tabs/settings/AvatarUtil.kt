@@ -1,11 +1,15 @@
 package com.isaakhanimann.journal.ui.tabs.settings
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 
@@ -54,6 +58,46 @@ object AvatarUtil {
         return remember(userName) {
             { launcher.launch("image/*") }
         }
+    }
+
+    /**
+     * Downscale and re-encode an avatar so it fits the server's 2 MiB limit.
+     * Phone photos are routinely larger than that.
+     */
+    @Suppress("DEPRECATION")
+    fun compressAvatar(bytes: ByteArray): ByteArray {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return bytes
+        var sampleSize = 1
+        while (bounds.outWidth / sampleSize > 1024 || bounds.outHeight / sampleSize > 1024) {
+            sampleSize *= 2
+        }
+        val decoded = BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        ) ?: return bytes
+        val scale = minOf(1f, 512f / maxOf(decoded.width, decoded.height))
+        val scaled = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                decoded,
+                (decoded.width * scale).toInt().coerceAtLeast(1),
+                (decoded.height * scale).toInt().coerceAtLeast(1),
+                true
+            )
+        } else {
+            decoded
+        }
+        val output = ByteArrayOutputStream()
+        val format = if (Build.VERSION.SDK_INT >= 30) {
+            Bitmap.CompressFormat.WEBP_LOSSY
+        } else {
+            Bitmap.CompressFormat.WEBP
+        }
+        scaled.compress(format, 80, output)
+        return output.toByteArray()
     }
 
     // --------------- 内部实现 ---------------

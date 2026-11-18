@@ -11,7 +11,7 @@ use webauthn_rs::prelude::{
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 
 use crate::{
-    auth::{jwt, middleware::AuthUser, passkey, password},
+    auth::{jwt, middleware::AuthUser, passkey, password, totp},
     error::AppError,
     extract::ApiJson,
     models::{AuthResponse, UserResponse, UserRow},
@@ -28,6 +28,39 @@ pub struct RegisterRequest {
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TotpVerifyRequest {
+    pub totp_token: String,
+    pub code: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TotpCodeRequest {
+    pub code: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LoginResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<UserResponse>,
+    pub requires_totp: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub totp_token: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TotpSetupResponse {
+    pub secret: String,
+    pub otpauth_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TotpStateResponse {
+    pub totp_enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,7 +128,7 @@ pub async fn register(
         StatusCode::CREATED,
         Json(AuthResponse {
             token,
-            user: UserResponse::from_parts(user_id, username, None, &state.config),
+            user: UserResponse::from_parts(user_id, username, None, false, &state.config),
         }),
     ))
 }
@@ -103,7 +136,7 @@ pub async fn register(
 pub async fn login(
     State(state): State<AppState>,
     ApiJson(payload): ApiJson<LoginRequest>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<Json<LoginResponse>, AppError> {
     let norm = validate::username_norm(&payload.username);
     let user = load_user_by_norm(&state.db, &norm).await?;
     let Some(hash) = user.password_hash.clone() else {
@@ -120,11 +153,151 @@ pub async fn login(
         return Err(AppError::unauthorized("invalid username or password"));
     }
 
+    if user.totp_enabled {
+        if user.totp_secret.is_none() {
+            return Err(AppError::internal_with(
+                "totp state",
+                "TOTP is enabled without a stored secret",
+            ));
+        }
+        let totp_token = jwt::issue_totp_pending(&state.config, user.id)?;
+        return Ok(Json(LoginResponse {
+            token: None,
+            user: None,
+            requires_totp: true,
+            totp_token: Some(totp_token),
+        }));
+    }
+
+    let token = jwt::issue(&state.config, user.id)?;
+    Ok(Json(LoginResponse {
+        token: Some(token),
+        user: Some(UserResponse::from_row(user, &state.config)),
+        requires_totp: false,
+        totp_token: None,
+    }))
+}
+
+pub async fn totp_verify(
+    State(state): State<AppState>,
+    ApiJson(payload): ApiJson<TotpVerifyRequest>,
+) -> Result<Json<AuthResponse>, AppError> {
+    let user_id = jwt::decode_totp_pending(&state.config, &payload.totp_token)?;
+    let user = load_user_by_id(&state.db, user_id).await?;
+    if !user.totp_enabled {
+        return Err(AppError::unauthorized(
+            "two-factor authentication is not enabled",
+        ));
+    }
+    let secret = user
+        .totp_secret
+        .clone()
+        .ok_or_else(|| AppError::internal_with("totp state", "missing TOTP secret"))?;
+    let code = parse_totp_code(&payload.code)?;
+    if !totp::verify_code(&secret, code, current_unix_time()) {
+        return Err(AppError::unauthorized("invalid two-factor code"));
+    }
     let token = jwt::issue(&state.config, user.id)?;
     Ok(Json(AuthResponse {
         token,
         user: UserResponse::from_row(user, &state.config),
     }))
+}
+
+pub async fn totp_setup(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<TotpSetupResponse>, AppError> {
+    let user = load_user_by_id(&state.db, auth.0).await?;
+    if user.totp_enabled {
+        return Err(AppError::conflict(
+            "totp_already_enabled",
+            "two-factor authentication is already enabled",
+        ));
+    }
+    let secret = totp::generate_secret();
+    sqlx::query("UPDATE users SET totp_secret = ?, totp_enabled = FALSE WHERE id = ?")
+        .bind(&secret)
+        .bind(auth.0)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(TotpSetupResponse {
+        secret: totp::secret_base32(&secret),
+        otpauth_url: totp::otpauth_url(&secret, "Journal", &user.username),
+    }))
+}
+
+pub async fn totp_enable(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    ApiJson(payload): ApiJson<TotpCodeRequest>,
+) -> Result<Json<TotpStateResponse>, AppError> {
+    let user = load_user_by_id(&state.db, auth.0).await?;
+    if user.totp_enabled {
+        return Err(AppError::conflict(
+            "totp_already_enabled",
+            "two-factor authentication is already enabled",
+        ));
+    }
+    let secret = user
+        .totp_secret
+        .clone()
+        .ok_or_else(|| AppError::bad_request("totp_setup_required", "start TOTP setup first"))?;
+    let code = parse_totp_code(&payload.code)?;
+    if !totp::verify_code(&secret, code, current_unix_time()) {
+        return Err(AppError::unauthorized("invalid two-factor code"));
+    }
+    sqlx::query("UPDATE users SET totp_enabled = TRUE WHERE id = ?")
+        .bind(auth.0)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(TotpStateResponse { totp_enabled: true }))
+}
+
+pub async fn totp_disable(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    ApiJson(payload): ApiJson<TotpCodeRequest>,
+) -> Result<Json<TotpStateResponse>, AppError> {
+    let user = load_user_by_id(&state.db, auth.0).await?;
+    if !user.totp_enabled {
+        return Err(AppError::bad_request(
+            "totp_not_enabled",
+            "two-factor authentication is not enabled",
+        ));
+    }
+    let secret = user
+        .totp_secret
+        .clone()
+        .ok_or_else(|| AppError::internal_with("totp state", "missing TOTP secret"))?;
+    let code = parse_totp_code(&payload.code)?;
+    if !totp::verify_code(&secret, code, current_unix_time()) {
+        return Err(AppError::unauthorized("invalid two-factor code"));
+    }
+    sqlx::query("UPDATE users SET totp_secret = NULL, totp_enabled = FALSE WHERE id = ?")
+        .bind(auth.0)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(TotpStateResponse {
+        totp_enabled: false,
+    }))
+}
+
+fn current_unix_time() -> u64 {
+    Utc::now().timestamp().max(0) as u64
+}
+
+fn parse_totp_code(raw: &str) -> Result<u32, AppError> {
+    let trimmed = raw.trim();
+    if trimmed.len() != 6 || !trimmed.chars().all(|c| c.is_ascii_digit()) {
+        return Err(AppError::bad_request(
+            "invalid_totp_code",
+            "code must be 6 digits",
+        ));
+    }
+    trimmed
+        .parse::<u32>()
+        .map_err(|_| AppError::bad_request("invalid_totp_code", "code must be 6 digits"))
 }
 
 pub async fn passkey_register_begin(
@@ -463,7 +636,8 @@ fn canonical_challenge_id(raw: &str) -> Result<String, AppError> {
 
 async fn load_user_by_norm(db: &MySqlPool, norm: &str) -> Result<UserRow, AppError> {
     let row = sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, password_hash, avatar_sha256 FROM users WHERE username_norm = ?",
+        "SELECT id, username, password_hash, avatar_sha256, totp_secret, totp_enabled \
+         FROM users WHERE username_norm = ?",
     )
     .bind(norm)
     .fetch_optional(db)
@@ -473,7 +647,8 @@ async fn load_user_by_norm(db: &MySqlPool, norm: &str) -> Result<UserRow, AppErr
 
 pub(crate) async fn load_user_by_id(db: &MySqlPool, user_id: u64) -> Result<UserRow, AppError> {
     let row = sqlx::query_as::<_, UserRow>(
-        "SELECT id, username, password_hash, avatar_sha256 FROM users WHERE id = ?",
+        "SELECT id, username, password_hash, avatar_sha256, totp_secret, totp_enabled \
+         FROM users WHERE id = ?",
     )
     .bind(user_id)
     .fetch_optional(db)

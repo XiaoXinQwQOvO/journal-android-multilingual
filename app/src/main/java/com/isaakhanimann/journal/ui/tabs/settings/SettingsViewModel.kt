@@ -24,9 +24,11 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.isaakhanimann.journal.data.account.AvatarSyncService
 import com.isaakhanimann.journal.data.journal.JournalExportService
 import com.isaakhanimann.journal.data.network.JournalSyncRepository
 import com.isaakhanimann.journal.data.room.experiences.ExperienceRepository
+import com.isaakhanimann.journal.data.sync.AutoUploadScheduler
 import com.isaakhanimann.journal.localization.I18n
 import com.isaakhanimann.journal.ui.notifications.Notifications
 import com.isaakhanimann.journal.ui.tabs.settings.combinations.UserPreferences
@@ -47,7 +49,9 @@ class SettingsViewModel @Inject constructor(
     private val fileSystemConnection: FileSystemConnection,
     private val userPreferences: UserPreferences,
     private val journalExportService: JournalExportService,
-    private val journalSyncRepository: JournalSyncRepository
+    private val journalSyncRepository: JournalSyncRepository,
+    private val autoUploadScheduler: AutoUploadScheduler,
+    private val avatarSyncService: AvatarSyncService
 ) : ViewModel() {
 
     fun saveDosageDotsAreHidden(value: Boolean) = viewModelScope.launch {
@@ -307,6 +311,38 @@ class SettingsViewModel @Inject constructor(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000)
     )
+
+    val isAutoUploadEnabledFlow = userPreferences.isAutoUploadEnabledFlow.stateIn(
+        initialValue = false,
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000)
+    )
+
+    fun setAutoUploadEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            if (enabled && userPreferences.authTokenFlow.firstOrNull() == null) {
+                snackbarHostState.showSnackbar(
+                    message = I18n.translate(context, "sync_not_logged_in"),
+                    duration = SnackbarDuration.Short
+                )
+                return@launch
+            }
+            userPreferences.saveAutoUploadEnabled(enabled)
+            if (enabled) {
+                autoUploadScheduler.scheduleIfEnabled()
+            } else {
+                autoUploadScheduler.cancel()
+            }
+        }
+    }
+
+    fun uploadOwnerAvatar() {
+        viewModelScope.launch {
+            if (userPreferences.authTokenFlow.firstOrNull() == null) return@launch
+            val username = userPreferences.ownerUserNameFlow.firstOrNull() ?: "You"
+            runCatching { avatarSyncService.uploadLocalAvatar(username) }
+        }
+    }
 
     fun uploadJournal() {
         viewModelScope.launch {

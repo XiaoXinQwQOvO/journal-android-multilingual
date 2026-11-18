@@ -6,8 +6,6 @@
 package com.isaakhanimann.journal.ui.tabs.settings
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import androidx.compose.material3.SnackbarDuration
@@ -22,15 +20,17 @@ import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.isaakhanimann.journal.data.account.AvatarSyncService
 import com.isaakhanimann.journal.data.network.AccountRepository
 import com.isaakhanimann.journal.data.network.ApiException
+import com.isaakhanimann.journal.data.network.LoginResult
+import com.isaakhanimann.journal.data.network.TotpSetupDto
 import com.isaakhanimann.journal.data.network.UserDto
 import com.isaakhanimann.journal.localization.I18n
 import com.isaakhanimann.journal.ui.tabs.settings.combinations.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
-import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -38,11 +38,13 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 
 @HiltViewModel
 class AccountViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val accountRepository: AccountRepository,
+    private val avatarSyncService: AvatarSyncService,
     private val userPreferences: UserPreferences
 ) : ViewModel() {
 
@@ -56,6 +58,15 @@ class AccountViewModel @Inject constructor(
 
     private val _isBusy = MutableStateFlow(false)
     val isBusyFlow = _isBusy
+
+    private val _pendingTotpToken = MutableStateFlow<String?>(null)
+    val pendingTotpTokenFlow = _pendingTotpToken
+
+    private val _totpEnabled = MutableStateFlow(false)
+    val totpEnabledFlow = _totpEnabled
+
+    private val _totpSetup = MutableStateFlow<TotpSetupDto?>(null)
+    val totpSetupFlow = _totpSetup
 
     fun register(username: String, password: String, confirmPassword: String) {
         val name = username.trim()
@@ -71,8 +82,7 @@ class AccountViewModel @Inject constructor(
         }
         busy {
             val user = accountRepository.register(name, password)
-            mirrorOwner(user)
-            showMessage(I18n.translate(context, "account_logged_in_as", mapOf("username" to user.username)))
+            onAuthenticated(user)
         }
     }
 
@@ -80,9 +90,83 @@ class AccountViewModel @Inject constructor(
         val name = username.trim()
         if (name.isEmpty() || password.isEmpty()) return
         busy {
-            val user = accountRepository.login(name, password)
-            mirrorOwner(user)
-            showMessage(I18n.translate(context, "account_logged_in_as", mapOf("username" to user.username)))
+            when (val result = accountRepository.login(name, password)) {
+                is LoginResult.TotpRequired -> {
+                    _pendingTotpToken.value = result.totpToken
+                }
+                is LoginResult.Success -> {
+                    onAuthenticated(result.user)
+                }
+            }
+        }
+    }
+
+    fun verifyTotp(code: String) {
+        val pending = _pendingTotpToken.value ?: return
+        busy {
+            try {
+                val user = accountRepository.verifyTotp(pending, code.trim())
+                _pendingTotpToken.value = null
+                onAuthenticated(user)
+            } catch (e: ApiException) {
+                if (e.code == 400 || e.code == 401) {
+                    showMessage(I18n.translate(context, "account_2fa_invalid_code"))
+                } else {
+                    throw e
+                }
+            }
+        }
+    }
+
+    fun cancelTotp() {
+        _pendingTotpToken.value = null
+    }
+
+    fun refreshProfile() {
+        viewModelScope.launch {
+            runCatching { accountRepository.me() }
+                .onSuccess { _totpEnabled.value = it.totpEnabled }
+        }
+    }
+
+    fun startTotpSetup() {
+        busy {
+            _totpSetup.value = accountRepository.totpSetup()
+        }
+    }
+
+    fun cancelTotpSetup() {
+        _totpSetup.value = null
+    }
+
+    fun confirmTotpEnable(code: String) {
+        busy {
+            try {
+                _totpEnabled.value = accountRepository.totpEnable(code.trim())
+                _totpSetup.value = null
+                showMessage(I18n.translate(context, "account_2fa_enabled"))
+            } catch (e: ApiException) {
+                if (e.code == 400 || e.code == 401) {
+                    showMessage(I18n.translate(context, "account_2fa_invalid_code"))
+                } else {
+                    throw e
+                }
+            }
+        }
+    }
+
+    fun disableTotp(code: String) {
+        busy {
+            try {
+                _totpEnabled.value = accountRepository.totpDisable(code.trim())
+                showMessage(I18n.translate(context, "account_2fa_disabled"))
+            } catch (e: ApiException) {
+                if (e.code == 400 || e.code == 401) {
+                    showMessage(I18n.translate(context, "account_2fa_invalid_code"))
+                } else {
+                    throw e
+                }
+            }
         }
     }
 
@@ -92,7 +176,9 @@ class AccountViewModel @Inject constructor(
         busy {
             val begin = accountRepository.passkeyLoginBegin(name)
             val request = GetCredentialRequest.Builder()
-                .addCredentialOption(GetPublicKeyCredentialOption(begin.options.toString()))
+                .addCredentialOption(
+                    GetPublicKeyCredentialOption(publicKeyJson(begin.options))
+                )
                 .build()
             val credential = CredentialManager.create(activityContext)
                 .getCredential(activityContext, request)
@@ -104,15 +190,14 @@ class AccountViewModel @Inject constructor(
                 begin.challengeId,
                 publicKey.authenticationResponseJson
             )
-            mirrorOwner(user)
-            showMessage(I18n.translate(context, "account_logged_in_as", mapOf("username" to user.username)))
+            onAuthenticated(user)
         }
     }
 
     fun addPasskey(activityContext: Context) {
         busy {
             val begin = accountRepository.passkeyRegisterBegin()
-            val request = CreatePublicKeyCredentialRequest(begin.options.toString())
+            val request = CreatePublicKeyCredentialRequest(publicKeyJson(begin.options))
             val credential = CredentialManager.create(activityContext)
                 .createCredential(activityContext, request)
             val publicKey = credential as? CreatePublicKeyCredentialResponse ?: run {
@@ -147,15 +232,12 @@ class AccountViewModel @Inject constructor(
             val bytes = withContext(Dispatchers.IO) {
                 activityContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             } ?: return@busy
-            // Phone photos routinely exceed the 2 MiB avatar limit, so downscale
-            // and re-encode before uploading; the same bytes are kept locally.
-            val compressed = withContext(Dispatchers.IO) { compressAvatar(bytes) }
-            accountRepository.uploadAvatar(compressed, "image/webp")
             withContext(Dispatchers.IO) {
                 val target = AvatarUtil.getAvatarFile(context, session.username)
                 target.parentFile?.mkdirs()
-                target.writeBytes(compressed)
+                target.writeBytes(bytes)
             }
+            avatarSyncService.uploadLocalAvatar(session.username)
             showMessage(I18n.translate(context, "account_avatar_updated"))
         }
     }
@@ -163,6 +245,9 @@ class AccountViewModel @Inject constructor(
     fun logout() {
         viewModelScope.launch {
             accountRepository.logout()
+            _totpEnabled.value = false
+            _totpSetup.value = null
+            _pendingTotpToken.value = null
         }
     }
 
@@ -184,44 +269,26 @@ class AccountViewModel @Inject constructor(
         }
     }
 
-    private fun compressAvatar(bytes: ByteArray): ByteArray {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return bytes
-        var sampleSize = 1
-        while (bounds.outWidth / sampleSize > 1024 || bounds.outHeight / sampleSize > 1024) {
-            sampleSize *= 2
-        }
-        val decoded = BitmapFactory.decodeByteArray(
-            bytes,
-            0,
-            bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        ) ?: return bytes
-        val scale = minOf(1f, 512f / maxOf(decoded.width, decoded.height))
-        val scaled = if (scale < 1f) {
-            Bitmap.createScaledBitmap(
-                decoded,
-                (decoded.width * scale).toInt().coerceAtLeast(1),
-                (decoded.height * scale).toInt().coerceAtLeast(1),
-                true
+    private suspend fun onAuthenticated(user: UserDto) {
+        _totpEnabled.value = user.totpEnabled
+        mirrorOwner(user)
+        showMessage(
+            I18n.translate(
+                context,
+                "account_logged_in_as",
+                mapOf("username" to user.username)
             )
-        } else {
-            decoded
-        }
-        val output = ByteArrayOutputStream()
-        val format = if (Build.VERSION.SDK_INT >= 30) {
-            Bitmap.CompressFormat.WEBP_LOSSY
-        } else {
-            Bitmap.CompressFormat.WEBP
-        }
-        scaled.compress(format, 80, output)
-        return output.toByteArray()
+        )
     }
 
     private suspend fun mirrorOwner(user: UserDto) {
         userPreferences.saveOwnerUserName(user.username)
-        val url = user.avatarUrl ?: return
+        val url = user.avatarUrl
+        if (url == null) {
+            // First login with a local avatar: publish it instead of dropping it.
+            runCatching { avatarSyncService.uploadLocalAvatar(user.username) }
+            return
+        }
         val bytes = accountRepository.downloadAvatar(url) ?: return
         withContext(Dispatchers.IO) {
             val target = AvatarUtil.getAvatarFile(context, user.username)
@@ -235,6 +302,13 @@ class AccountViewModel @Inject constructor(
             snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
         }
     }
+
+    /**
+ * webauthn-rs returns `{"publicKey": {...}}`, while Credential Manager expects
+ * the inner PublicKeyCredentialCreationOptions / RequestOptions object.
+ */
+    private fun publicKeyJson(options: JsonObject): String =
+        ((options["publicKey"] as? JsonObject) ?: options).toString()
 
     private fun messageFor(e: Exception): String {
         if (e is ApiException) {

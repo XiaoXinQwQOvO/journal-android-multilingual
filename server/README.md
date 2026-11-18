@@ -400,7 +400,16 @@ uploads).
 
 - Authentication: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`.
   Both return `{ "token": "...", "user": { "id": 1, "username": "...",
-  "avatar_url": null, "avatar_sha256": null } }`. Register returns 201.
+  "avatar_url": null, "avatar_sha256": null, "totp_enabled": false } }`.
+  Register returns 201. When TOTP is enabled, login instead returns
+  `{ "requires_totp": true, "totp_token": "..." }`; submit
+  `POST /api/v1/auth/totp/verify` with `{ "totp_token": "...", "code": "123456" }`
+  to receive the normal `{token,user}` response. Passkey login is already
+  multi-factor and does not ask for a TOTP code.
+- Two-factor setup: `POST /api/v1/auth/totp/setup` (JWT) returns
+  `{ "secret": "...", "otpauth_url": "otpauth://..." }`; `POST
+  /api/v1/auth/totp/{enable|disable}` (JWT, `{ "code": "123456" }`) turns it on
+  or off. Secrets are stored as raw bytes in MySQL and shown only once.
 - Passkeys: `POST /api/v1/auth/passkey/{register|login}/{begin|finish}`.
   Begin returns `{ "challenge_id": "...", "options": { ...WebAuthn JSON... } }`;
   finish accepts `{ "challenge_id": "...", "credential": { ... } }`.

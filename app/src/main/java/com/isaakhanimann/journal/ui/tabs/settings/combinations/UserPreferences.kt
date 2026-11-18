@@ -65,7 +65,17 @@ class UserPreferences @Inject constructor(private val dataStore: DataStore<Prefe
         val KEY_ACCOUNT_USER_ID = longPreferencesKey("key_account_user_id")
         val KEY_ACCOUNT_USERNAME = stringPreferencesKey("key_account_username")
         val KEY_ACCOUNT_AVATAR_SHA = stringPreferencesKey("key_account_avatar_sha")
+        val KEY_AUTO_UPLOAD_ENABLED = booleanPreferencesKey("key_auto_upload_enabled")
     }
+
+    suspend fun saveAutoUploadEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.KEY_AUTO_UPLOAD_ENABLED] = value
+        }
+    }
+
+    val isAutoUploadEnabledFlow: Flow<Boolean> = dataStore.data
+        .map { preferences -> preferences[PreferencesKeys.KEY_AUTO_UPLOAD_ENABLED] ?: false }
 
     suspend fun saveSession(token: String, userId: Long, username: String, avatarSha: String?) {
         dataStore.edit { preferences ->

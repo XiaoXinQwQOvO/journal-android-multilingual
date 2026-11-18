@@ -11,6 +11,11 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.json.JsonObject
 
+sealed interface LoginResult {
+    data class Success(val user: UserDto) : LoginResult
+    data class TotpRequired(val totpToken: String) : LoginResult
+}
+
 @Singleton
 class AccountRepository @Inject constructor(
     private val api: ApiClient,
@@ -29,7 +34,7 @@ class AccountRepository @Inject constructor(
         return saveAuth(decodeAuth(response))
     }
 
-    suspend fun login(username: String, password: String): UserDto {
+    suspend fun login(username: String, password: String): LoginResult {
         val response = api.sendJson(
             path = "auth/login",
             method = "POST",
@@ -39,7 +44,55 @@ class AccountRepository @Inject constructor(
             ),
             authenticated = false
         )
+        val login = api.json.decodeFromString(LoginResponse.serializer(), response)
+        val token = login.token
+        val user = login.user
+        if (login.requiresTotp) {
+            val pending = login.totpToken
+                ?: throw ApiException(0, "Server requested a two-factor code without a token")
+            return LoginResult.TotpRequired(pending)
+        }
+        if (token == null || user == null) {
+            throw ApiException(0, "Server returned an incomplete login response")
+        }
+        saveAuth(AuthResponse(token, user))
+        return LoginResult.Success(user)
+    }
+
+    suspend fun verifyTotp(totpToken: String, code: String): UserDto {
+        val response = api.sendJson(
+            path = "auth/totp/verify",
+            method = "POST",
+            body = api.json.encodeToString(
+                TotpVerifyRequest.serializer(),
+                TotpVerifyRequest(totpToken, code)
+            ),
+            authenticated = false
+        )
         return saveAuth(decodeAuth(response))
+    }
+
+    suspend fun totpSetup(): TotpSetupDto {
+        val response = api.sendJson("auth/totp/setup", "POST", "{}")
+        return api.json.decodeFromString(TotpSetupDto.serializer(), response)
+    }
+
+    suspend fun totpEnable(code: String): Boolean {
+        val response = api.sendJson(
+            path = "auth/totp/enable",
+            method = "POST",
+            body = api.json.encodeToString(TotpCodeRequest.serializer(), TotpCodeRequest(code))
+        )
+        return api.json.decodeFromString(TotpStateDto.serializer(), response).totpEnabled
+    }
+
+    suspend fun totpDisable(code: String): Boolean {
+        val response = api.sendJson(
+            path = "auth/totp/disable",
+            method = "POST",
+            body = api.json.encodeToString(TotpCodeRequest.serializer(), TotpCodeRequest(code))
+        )
+        return api.json.decodeFromString(TotpStateDto.serializer(), response).totpEnabled
     }
 
     suspend fun logout() = userPreferences.clearSession()

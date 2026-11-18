@@ -126,6 +126,7 @@ fun SettingsScreen(
 ) {
     val ownerUserName = viewModel.ownerUserNameFlow.collectAsState(initial = "You").value ?: "You"
     val accountSession = viewModel.accountSessionFlow.collectAsState(initial = null).value
+    val isAutoUploadEnabled = viewModel.isAutoUploadEnabledFlow.collectAsState(initial = false).value
     SettingsScreen(
         navigateToFAQ = navigateToFAQ,
         navigateToComboSettings = navigateToComboSettings,
@@ -148,7 +149,10 @@ fun SettingsScreen(
         isLoggedIn = accountSession != null,
         accountUsername = accountSession?.username,
         uploadJournal = viewModel::uploadJournal,
-        downloadJournal = viewModel::downloadJournal
+        downloadJournal = viewModel::downloadJournal,
+        isAutoUploadEnabled = isAutoUploadEnabled,
+        setAutoUploadEnabled = viewModel::setAutoUploadEnabled,
+        uploadOwnerAvatar = viewModel::uploadOwnerAvatar
     )
 }
 
@@ -176,7 +180,10 @@ fun SettingsScreen(
     isLoggedIn: Boolean = false,
     accountUsername: String? = null,
     uploadJournal: () -> Unit = {},
-    downloadJournal: () -> Unit = {}
+    downloadJournal: () -> Unit = {},
+    isAutoUploadEnabled: Boolean = false,
+    setAutoUploadEnabled: (Boolean) -> Unit = {},
+    uploadOwnerAvatar: () -> Unit = {}
 ) {
     val topBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -203,7 +210,8 @@ fun SettingsScreen(
             OwnerProfileCard(
                 ownerUserName = ownerUserName,
                 onUserNameChanged = saveOwnerUserName,
-                achievements = achievements
+                achievements = achievements,
+                onAvatarSaved = uploadOwnerAvatar
             )
 
             CardWithTitle(title = i18n("settings_account"), innerPaddingHorizontal = 0.dp) {
@@ -420,10 +428,40 @@ fun SettingsScreen(
                         }
                     )
                 }
-                HorizontalDivider()
-                var isShowingDownloadConfirm by remember { mutableStateOf(false) }
                 val scopeSync = rememberCoroutineScope()
                 val notLoggedInMessage = i18n("sync_not_logged_in")
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 15.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(i18n("settings_auto_upload"))
+                        Text(
+                            text = i18n("settings_auto_upload_desc"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = isAutoUploadEnabled,
+                        onCheckedChange = { checked ->
+                            if (checked && !isLoggedIn) {
+                                scopeSync.launch {
+                                    snackbarHostState.showSnackbar(notLoggedInMessage)
+                                }
+                                navigateToAccount()
+                            } else {
+                                setAutoUploadEnabled(checked)
+                            }
+                        }
+                    )
+                }
+                HorizontalDivider()
+                var isShowingDownloadConfirm by remember { mutableStateOf(false) }
                 SettingsButton(
                     imageVector = Icons.Outlined.CloudUpload,
                     text = i18n("settings_upload_data")
@@ -638,6 +676,7 @@ fun OwnerProfileCard(
     ownerUserName: String = "You",
     achievements: List<String> = emptyList(),
     onUserNameChanged: (String) -> Unit, // 调用 ViewModel/DataStore 更新用户名
+    onAvatarSaved: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -663,6 +702,7 @@ fun OwnerProfileCard(
 
         onAvatarSaved = {
             avatarRefresh++
+            onAvatarSaved()
         }
 
     )

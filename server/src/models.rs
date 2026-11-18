@@ -9,6 +9,8 @@ pub struct UserRow {
     pub username: String,
     pub password_hash: Option<String>,
     pub avatar_sha256: Option<String>,
+    pub totp_secret: Option<Vec<u8>>,
+    pub totp_enabled: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -17,6 +19,7 @@ pub struct UserResponse {
     pub username: String,
     pub avatar_url: Option<String>,
     pub avatar_sha256: Option<String>,
+    pub totp_enabled: bool,
 }
 
 impl UserResponse {
@@ -24,6 +27,7 @@ impl UserResponse {
         id: u64,
         username: String,
         avatar_sha256: Option<String>,
+        totp_enabled: bool,
         config: &Config,
     ) -> Self {
         let avatar_url = avatar_sha256.as_ref().map(|sha| config.avatar_url(id, sha));
@@ -32,11 +36,18 @@ impl UserResponse {
             username,
             avatar_url,
             avatar_sha256,
+            totp_enabled,
         }
     }
 
     pub fn from_row(row: UserRow, config: &Config) -> Self {
-        Self::from_parts(row.id, row.username, row.avatar_sha256, config)
+        Self::from_parts(
+            row.id,
+            row.username,
+            row.avatar_sha256,
+            row.totp_enabled,
+            config,
+        )
     }
 }
 

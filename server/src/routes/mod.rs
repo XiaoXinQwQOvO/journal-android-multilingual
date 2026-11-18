@@ -27,6 +27,7 @@ pub fn router(state: AppState) -> Router {
             "/auth/passkey/login/finish",
             post(auth::passkey_login_finish),
         )
+        .route("/auth/totp/verify", post(auth::totp_verify))
         .route("/users/{id}/avatar", get(me::get_avatar))
         .route("/packs/{name}/icon", get(packs::get_pack_icon));
 
@@ -39,6 +40,9 @@ pub fn router(state: AppState) -> Router {
             "/auth/passkey/register/finish",
             post(auth::passkey_register_finish),
         )
+        .route("/auth/totp/setup", post(auth::totp_setup))
+        .route("/auth/totp/enable", post(auth::totp_enable))
+        .route("/auth/totp/disable", post(auth::totp_disable))
         .route("/me", get(me::get_me).patch(me::update_me))
         .route(
             "/me/avatar",
