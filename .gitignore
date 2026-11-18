@@ -14,3 +14,4 @@ release
 *.keystore.jks
 *.keystore
 keystore_b64.txt
+/server/
