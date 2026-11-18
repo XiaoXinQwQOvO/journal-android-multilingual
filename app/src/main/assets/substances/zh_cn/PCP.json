@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "长期且反复使用",
+    "half": "3 - 7天",
+    "zero": "1 - 2周",
+    "halfToleranceInHours": 120,
+    "zeroToleranceInHours": 252
+  },
+  "addictionPotential": "高度成瘾，且极易引发精神病等不良副作用",
+  "toxicities": [],
+  "summary": "一种强效的分离性药物。PCP主要作为NMDA受体拮抗剂发挥作用。也被称为\"湿\"或\"天使尘\"。虽然关于其影响下的人出现怪异甚至暴力行为的传闻最为人所知，但这些情况很可能只发生在过量服用时。",
+  "localizedName": "PCP"
+}

@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "摄入后几乎立即",
+    "half": "3天",
+    "zero": "7天",
+    "halfToleranceInHours": 72,
+    "zeroToleranceInHours": 168
+  },
+  "addictionPotential": "无成瘾性",
+  "toxicities": ["毒性剂量未知"],
+  "summary": "麦斯卡林的类似物，剂量低得多，似乎主要依赖于色彩效果。",
+  "localizedName": "烯丙基乙斯卡林"
+}

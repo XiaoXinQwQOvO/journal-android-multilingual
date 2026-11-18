@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "almost immediately after ingestion",
+    "half": "3 days",
+    "zero": "7 days",
+    "halfToleranceInHours": 72,
+    "zeroToleranceInHours": 168
+  },
+  "addictionPotential": "not habit-forming",
+  "toxicities": ["toxic dose is unknown"],
+  "summary": "A lysergamide very similar to LSD usually distinguishable only by its shorter duration, though some subjective reports have noted it may be slightly more introspective and slightly less confusing.",
+  "localizedName": "LSZ"
+}

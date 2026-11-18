@@ -1,0 +1,146 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.hilt.gradle)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
+}
+
+android {
+    ndkVersion "29.0.14206865"
+    compileSdk 37
+
+    defaultConfig {
+        applicationId "in.kawaiis.journal"
+        minSdk 26
+        targetSdk 37
+        versionCode 1100600
+
+        versionName "11.6"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        release {
+            def b64 = System.getenv("KEYSTORE_BASE64")
+            if (b64 != null && !b64.isBlank()) {
+                b64 = b64.trim().replaceAll("\\s", "")
+                def keystoreFile = file("${project.layout.buildDirectory.get()}/release.keystore.jks")
+                keystoreFile.parentFile.mkdirs()
+                keystoreFile.bytes = java.util.Base64.getDecoder().decode(b64)
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            def b64 = System.getenv("KEYSTORE_BASE64")
+            if (b64 != null && !b64.isBlank()) {
+                signingConfig = signingConfigs.release
+            } else {
+                signingConfig = null
+            }
+            
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            vcsInfo {
+                // F-Droid reproducible builds: the embedded VCS info differs between
+                // build environments, breaking byte-identical verification.
+                include = false
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig = false
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
+    splits {
+        abi {
+            // Per-ABI APKs only when the CI sets ENABLE_SPLITS=true; local and
+            // debug builds stay split-free so assembleDebug produces one APK.
+            enable System.getenv("ENABLE_SPLITS") == "true"
+            reset()
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            universalApk true
+        }
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+    }
+    
+    namespace "com.isaakhanimann.journal"
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+dependencies {
+    implementation(platform(libs.androidx.compose.bom))
+    
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.datastore.preferences)
+
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material.icons.extended)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    implementation(libs.androidx.browser)
+    implementation(libs.androidx.fragment)
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.work)
+
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler) 
+    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)  
+
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+
+    implementation(libs.accompanist.webview)
+    implementation(libs.kizitonwose.calendar.compose)
+    implementation(libs.towdium.pinin)
+    implementation(libs.coil.compose)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.json.test)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+}

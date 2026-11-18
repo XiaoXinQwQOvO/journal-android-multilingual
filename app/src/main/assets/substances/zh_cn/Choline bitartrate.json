@@ -1,0 +1,12 @@
+{
+  "tolerance": {
+    "full": "长期反复使用后",
+    "half": "7天",
+    "zero": "14天",
+    "halfToleranceInHours": 168,
+    "zeroToleranceInHours": 336
+  },
+  "addictionPotential": "无成瘾性",
+  "toxicities": ["极低毒性"],
+  "localizedName": "重酒石酸胆碱"
+}

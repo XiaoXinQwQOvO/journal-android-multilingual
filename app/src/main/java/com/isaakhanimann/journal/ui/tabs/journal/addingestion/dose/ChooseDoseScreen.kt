@@ -1,0 +1,687 @@
+/*
+ * Copyright (c) 2022-2023. Isaak Hanimann.
+ * This file is part of PsychonautWiki Journal.
+ *
+ * PsychonautWiki Journal is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at
+ * your option) any later version.
+ *
+ * PsychonautWiki Journal is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with PsychonautWiki Journal.  If not, see https://www.gnu.org/licenses/gpl-3.0.en.html.
+ */
+
+package com.isaakhanimann.journal.ui.tabs.journal.addingestion.dose
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Newspaper
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.isaakhanimann.journal.data.room.experiences.entities.CustomUnit
+import com.isaakhanimann.journal.data.substances.AdministrationRoute
+import com.isaakhanimann.journal.data.substances.classes.roa.DoseClass
+import com.isaakhanimann.journal.data.substances.classes.roa.RoaDose
+import com.isaakhanimann.journal.localization.i18n
+import com.isaakhanimann.journal.localization.i18nOrDefault
+import com.isaakhanimann.journal.ui.tabs.search.substance.roa.dose.RoaDosePreviewProvider
+import com.isaakhanimann.journal.ui.tabs.search.substance.roa.dose.RoaDoseView
+import com.isaakhanimann.journal.ui.tabs.search.substance.roa.toReadableString
+import com.isaakhanimann.journal.ui.theme.horizontalPadding
+import com.isaakhanimann.journal.ui.utils.administrationRouteKey
+
+@Composable
+fun ChooseDoseScreen(
+    navigateToChooseTimeAndMaybeColor: (
+        units: String?,
+        isEstimate: Boolean,
+        dose: Double?,
+        estimatedDoseStandardDeviation: Double?,
+        customUnitId: Int?
+    ) -> Unit,
+    navigateToVolumetricDosingScreenOnJournalTab: () -> Unit,
+    navigateToURL: (url: String) -> Unit,
+    navigateToSaferSniffingScreen: () -> Unit,
+    viewModel: ChooseDoseViewModel = hiltViewModel()
+) {
+    ChooseDoseScreen(
+        navigateToVolumetricDosingScreen = navigateToVolumetricDosingScreenOnJournalTab,
+        navigateToSaferSniffingScreen = navigateToSaferSniffingScreen,
+        substanceName = viewModel.substance.name,
+        getSubstanceDisplayName = viewModel.repository::getDisplayName,
+        roaDose = viewModel.roaDose,
+        administrationRoute = viewModel.administrationRoute,
+        doseText = viewModel.doseText,
+        doseRemark = viewModel.substance.dosageRemark,
+        onChangeDoseText = viewModel::onDoseTextChange,
+        estimatedDoseStandardDeviationText = viewModel.estimatedDoseStandardDeviationText,
+        onChangeEstimatedDoseStandardDeviationText = viewModel::onEstimatedDoseStandardDeviationChange,
+        isValidDose = viewModel.isValidDose,
+        isEstimate = viewModel.isEstimate,
+        onChangeIsEstimate = {
+            viewModel.isEstimate = it
+        },
+        navigateToNext = {
+            val customUnit = viewModel.customUnitsFlow.value
+                .firstOrNull { it.id == viewModel.selectedCustomUnitId }
+            navigateToChooseTimeAndMaybeColor(
+                viewModel.units,
+                viewModel.isEstimate,
+                viewModel.doseForNext(customUnit),
+                viewModel.estimatedDoseStandardDeviation,
+                viewModel.selectedCustomUnitId
+            )
+        },
+        navigateToURL = navigateToURL,
+        useUnknownDoseAndNavigate = {
+            navigateToChooseTimeAndMaybeColor(
+                viewModel.units,
+                false,
+                null,
+                null,
+                null
+            )
+        },
+        currentDoseClass = viewModel.currentDoseClass,
+        purityText = viewModel.purityText,
+        onPurityChange = {
+            viewModel.purityText = it
+        },
+        isValidPurity = viewModel.isPurityValid,
+        convertedDoseAndUnitText = viewModel.rawDoseWithUnit,
+        isShowingUnitsField = viewModel.roaDose?.units?.isBlank() ?: true,
+        units = viewModel.units,
+        onChangeOfUnits = { viewModel.units = it },
+        customUnits = viewModel.customUnitsFlow.collectAsState().value,
+        selectedCustomUnitId = viewModel.selectedCustomUnitId,
+        onSelectCustomUnit = viewModel::selectCustomUnit,
+        onCreateCustomUnit = viewModel::createCustomUnit,
+        onClearCustomUnit = viewModel::clearCustomUnit,
+        quickUnitName = viewModel.quickUnitName,
+        onQuickUnitNameChange = { viewModel.quickUnitName = it },
+        quickUnitDoseText = viewModel.quickUnitDoseText,
+        onQuickUnitDoseTextChange = { viewModel.quickUnitDoseText = it },
+        quickUnitUnitText = viewModel.quickUnitUnitText,
+        onQuickUnitUnitTextChange = { viewModel.quickUnitUnitText = it }
+    )
+}
+
+@Preview
+@Composable
+fun ChooseDoseScreenPreview(@PreviewParameter(RoaDosePreviewProvider::class) roaDose: RoaDose) {
+    ChooseDoseScreen(
+        navigateToVolumetricDosingScreen = {},
+        navigateToSaferSniffingScreen = {},
+        substanceName = "Example substance",
+        roaDose = roaDose,
+        administrationRoute = AdministrationRoute.INSUFFLATED,
+        doseText = "5",
+        onChangeDoseText = {},
+        estimatedDoseStandardDeviationText = "",
+        onChangeEstimatedDoseStandardDeviationText = {},
+        doseRemark = "This is a dose remark",
+        isValidDose = true,
+        isEstimate = false,
+        onChangeIsEstimate = {},
+        navigateToNext = {},
+        navigateToURL = {},
+        useUnknownDoseAndNavigate = {},
+        currentDoseClass = DoseClass.THRESHOLD,
+        purityText = "20",
+        onPurityChange = {},
+        isValidPurity = true,
+        convertedDoseAndUnitText = "25 mg",
+        isShowingUnitsField = false,
+        units = "mg",
+        onChangeOfUnits = {}
+    )
+}
+
+@Preview
+@Composable
+fun ChooseDoseScreenPreview2() {
+    ChooseDoseScreen(
+        navigateToVolumetricDosingScreen = {},
+        navigateToSaferSniffingScreen = {},
+        substanceName = "Example Substance",
+        roaDose = null,
+        administrationRoute = AdministrationRoute.ORAL,
+        doseRemark = null,
+        doseText = "5",
+        onChangeDoseText = {},
+        estimatedDoseStandardDeviationText = "",
+        onChangeEstimatedDoseStandardDeviationText = {},
+        isValidDose = true,
+        isEstimate = false,
+        onChangeIsEstimate = {},
+        navigateToNext = {},
+        navigateToURL = {},
+        useUnknownDoseAndNavigate = {},
+        currentDoseClass = null,
+        purityText = "20",
+        onPurityChange = {},
+        isValidPurity = true,
+        convertedDoseAndUnitText = "25 mg",
+        isShowingUnitsField = false,
+        units = "mg",
+        onChangeOfUnits = {}
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChooseDoseScreen(
+    navigateToVolumetricDosingScreen: () -> Unit,
+    navigateToSaferSniffingScreen: () -> Unit,
+    navigateToURL: (url: String) -> Unit,
+    substanceName: String,
+    getSubstanceDisplayName: (String) -> String = { it },
+    roaDose: RoaDose?,
+    administrationRoute: AdministrationRoute,
+    doseRemark: String?,
+    doseText: String,
+    onChangeDoseText: (String) -> Unit,
+    estimatedDoseStandardDeviationText: String,
+    onChangeEstimatedDoseStandardDeviationText: (String) -> Unit,
+    isValidDose: Boolean,
+    isEstimate: Boolean,
+    onChangeIsEstimate: (Boolean) -> Unit,
+    navigateToNext: () -> Unit,
+    useUnknownDoseAndNavigate: () -> Unit,
+    currentDoseClass: DoseClass?,
+    purityText: String,
+    onPurityChange: (purity: String) -> Unit,
+    isValidPurity: Boolean,
+    convertedDoseAndUnitText: String?,
+    isShowingUnitsField: Boolean,
+    units: String,
+    onChangeOfUnits: (units: String) -> Unit,
+    customUnits: List<CustomUnit> = emptyList(),
+    selectedCustomUnitId: Int? = null,
+    onSelectCustomUnit: (Int?) -> Unit = {},
+    onCreateCustomUnit: () -> Unit = {},
+    onClearCustomUnit: () -> Unit = {},
+    quickUnitName: String = "",
+    onQuickUnitNameChange: (String) -> Unit = {},
+    quickUnitDoseText: String = "",
+    onQuickUnitDoseTextChange: (String) -> Unit = {},
+    quickUnitUnitText: String = "",
+    onQuickUnitUnitTextChange: (String) -> Unit = {}
+) {
+    Scaffold(
+        topBar = {
+            val routeName = i18nOrDefault(
+                administrationRouteKey(administrationRoute),
+                administrationRoute.displayText
+            )
+            TopAppBar(
+                title = {
+                    Text(
+                        i18n(
+                            "dose_title_with_route",
+                            mapOf(
+                                "substance" to getSubstanceDisplayName(substanceName),
+                                "route" to routeName
+                            )
+                        )
+                    )
+                }
+            )
+        },
+        floatingActionButton = {
+            if (isValidDose) {
+                ExtendedFloatingActionButton(
+                    modifier = Modifier.imePadding(),
+                    onClick = navigateToNext,
+                    icon = {
+                        Icon(
+                            Icons.AutoMirrored.Filled.NavigateNext,
+                            contentDescription = i18n("common_next")
+                        )
+                    },
+                    text = { Text(i18n("common_next")) }
+                )
+            }
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            LinearProgressIndicator(
+                progress = { 0.67f },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            ElevatedCard(
+                modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(
+                        horizontal = horizontalPadding,
+                        vertical = 10.dp
+                    )
+                ) {
+                    if (!doseRemark.isNullOrBlank()) {
+                        Text(text = doseRemark, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(modifier = Modifier.height(5.dp))
+                    if (roaDose != null) {
+                        RoaDoseView(roaDose = roaDose)
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = i18n("dosage_warning")
+                            )
+                            Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
+                            Text(
+                                text = i18n("dosage_info_missing")
+                            )
+                        }
+                    }
+                    OptionalDosageUnitDisclaimer(substanceName)
+                    Text(text = i18n("dose_disclaimer"), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            ElevatedCard(
+                modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(
+                        horizontal = horizontalPadding,
+                        vertical = 10.dp
+                    )
+                ) {
+                    if (roaDose != null) {
+                        AnimatedVisibility(visible = currentDoseClass != null) {
+                            if (currentDoseClass != null) {
+                                CurrentDoseClassInfo(currentDoseClass, roaDose)
+                            }
+                        }
+                    }
+                    val focusManager = LocalFocusManager.current
+                    val focusRequester = remember { FocusRequester() }
+                    val textStyle = MaterialTheme.typography.titleMedium
+                    LaunchedEffect(Unit) {
+                        focusRequester.requestFocus()
+                    }
+                    val selectedCustomUnitForLabel =
+                        customUnits.firstOrNull { it.id == selectedCustomUnitId }
+                    OutlinedTextField(
+                        value = doseText,
+                        onValueChange = onChangeDoseText,
+                        textStyle = textStyle,
+                        label = {
+                            Text(
+                                if (selectedCustomUnitForLabel != null) {
+                                    i18n("quick_custom_unit_count_label")
+                                } else {
+                                    i18n("dose_label")
+                                },
+                                style = textStyle
+                            )
+                        },
+                        isError = !isValidDose,
+                        trailingIcon = {
+                            Text(
+                                text = selectedCustomUnitForLabel?.unit ?: units,
+                                style = textStyle,
+                                modifier = Modifier.padding(horizontal = horizontalPadding)
+                            )
+                        },
+                        keyboardActions = KeyboardActions(onDone = {
+                            focusManager.clearFocus()
+                        }),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                    )
+                    if (isShowingUnitsField) {
+                        OutlinedTextField(
+                            value = units,
+                            onValueChange = onChangeOfUnits,
+                            label = { Text(i18n("dose_units_label")) },
+                            keyboardActions = KeyboardActions(onDone = {
+                                focusManager.clearFocus()
+                            }),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedButton(onClick = { onChangeOfUnits("µg") }) {
+                                Text(text = i18n("unit_mcg"))
+                            }
+                            OutlinedButton(onClick = { onChangeOfUnits("mg") }) {
+                                Text(text = i18n("unit_mg"))
+                            }
+                            OutlinedButton(onClick = { onChangeOfUnits("g") }) {
+                                Text(text = i18n("unit_g"))
+                            }
+                            OutlinedButton(onClick = { onChangeOfUnits("mL") }) {
+                                Text(text = i18n("unit_ml"))
+                            }
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Switch(checked = isEstimate, onCheckedChange = onChangeIsEstimate)
+                        Text(
+                            i18n("dose_estimate_label"),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                    AnimatedVisibility(visible = isEstimate) {
+                        Column {
+                            OutlinedTextField(
+                                value = estimatedDoseStandardDeviationText,
+                                onValueChange = onChangeEstimatedDoseStandardDeviationText,
+                                textStyle = textStyle,
+                                label = {
+                                    Text(
+                                        i18n("dose_estimated_sd_label"),
+                                        style = textStyle
+                                    )
+                                },
+                                trailingIcon = {
+                                    Text(
+                                        text = units,
+                                        style = textStyle,
+                                        modifier = Modifier.padding(horizontal = horizontalPadding)
+                                    )
+                                },
+                                keyboardActions = KeyboardActions(onDone = {
+                                    focusManager.clearFocus()
+                                }),
+                                isError = estimatedDoseStandardDeviationText.toDoubleOrNull() == null,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            val mean = doseText.toDoubleOrNull()
+                            val standardDeviation = estimatedDoseStandardDeviationText.toDoubleOrNull()
+                            val isExplanationShown = mean != null && standardDeviation != null
+                            AnimatedVisibility(isExplanationShown) {
+                                if (mean != null && standardDeviation != null) {
+                                    StandardDeviationExplanation(
+                                        mean = mean,
+                                        standardDeviation = standardDeviation,
+                                        unit = units
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Quick custom unit ---
+                    val selectedCustomUnit =
+                        customUnits.firstOrNull { it.id == selectedCustomUnitId }
+                    var isShowingQuickUnitDialog by remember { mutableStateOf(false) }
+                    if (selectedCustomUnit != null) {
+                        val quantity = doseText.toDoubleOrNull()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = i18n(
+                                    "quick_custom_unit_count",
+                                    mapOf(
+                                        "unit" to selectedCustomUnit.name,
+                                        "dose" to (selectedCustomUnit.dose ?: 0.0).toReadableString(),
+                                        "originalUnit" to selectedCustomUnit.originalUnit
+                                    )
+                                ),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            TextButton(onClick = onClearCustomUnit) {
+                                Text(text = i18n("quick_custom_unit_clear"))
+                            }
+                        }
+                        if (quantity != null) {
+                            Text(
+                                text = i18n(
+                                    "quick_custom_unit_converted",
+                                    mapOf(
+                                        "dose" to (quantity * (selectedCustomUnit.dose ?: 0.0)).toReadableString(),
+                                        "unit" to selectedCustomUnit.originalUnit
+                                    )
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        TextButton(onClick = { isShowingQuickUnitDialog = true }) {
+                            Text(text = i18n("quick_custom_unit"))
+                        }
+                        if (isShowingQuickUnitDialog) {
+                            AlertDialog(
+                                onDismissRequest = { isShowingQuickUnitDialog = false },
+                                title = { Text(i18n("quick_custom_unit_title")) },
+                                text = {
+                                    Column(
+                                        modifier = Modifier.verticalScroll(rememberScrollState())
+                                    ) {
+                                        if (customUnits.isNotEmpty()) {
+                                            Text(
+                                                text = i18n("quick_custom_unit_existing"),
+                                                style = MaterialTheme.typography.titleSmall
+                                            )
+                                            customUnits.forEach { unit ->
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            onSelectCustomUnit(unit.id)
+                                                            isShowingQuickUnitDialog = false
+                                                        }
+                                                ) {
+                                                    RadioButton(
+                                                        selected = unit.id == selectedCustomUnitId,
+                                                        onClick = null
+                                                    )
+                                                    Text(
+                                                        text = "${unit.name} · ${(unit.dose ?: 0.0).toReadableString()} ${unit.originalUnit}"
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                        }
+                                        Text(
+                                            text = i18n("quick_custom_unit_new"),
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                        OutlinedTextField(
+                                            value = quickUnitName,
+                                            onValueChange = onQuickUnitNameChange,
+                                            label = { Text(i18n("quick_custom_unit_name")) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        OutlinedTextField(
+                                            value = quickUnitDoseText,
+                                            onValueChange = onQuickUnitDoseTextChange,
+                                            label = { Text(i18n("quick_custom_unit_dose")) },
+                                            keyboardOptions = KeyboardOptions(
+                                                keyboardType = KeyboardType.Number
+                                            ),
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        OutlinedTextField(
+                                            value = quickUnitUnitText,
+                                            onValueChange = onQuickUnitUnitTextChange,
+                                            label = { Text(i18n("quick_custom_unit_unit")) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(
+                                        enabled = quickUnitName.isNotBlank() &&
+                                            quickUnitDoseText.toDoubleOrNull() != null &&
+                                            quickUnitUnitText.isNotBlank(),
+                                        onClick = {
+                                            onCreateCustomUnit()
+                                            isShowingQuickUnitDialog = false
+                                        }
+                                    ) {
+                                        Text(i18n("common_done"))
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { isShowingQuickUnitDialog = false }) {
+                                        Text(i18n("common_cancel"))
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            AnimatedVisibility(visible = isValidDose) {
+                ElevatedCard(
+                    modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(
+                            horizontal = horizontalPadding,
+                            vertical = 10.dp
+                        )
+                    ) {
+                        PurityCalculation(
+                            purityText = purityText,
+                            onPurityChange = onPurityChange,
+                            convertedDoseAndUnitText = convertedDoseAndUnitText,
+                            isValidPurity = isValidPurity
+                        )
+                    }
+                }
+            }
+            var isShowingUnknownDoseDialog by remember { mutableStateOf(false) }
+            TextButton(onClick = { isShowingUnknownDoseDialog = true }) {
+                Text(text = i18n("log_unknown_dose"))
+            }
+            AnimatedVisibility(visible = isShowingUnknownDoseDialog) {
+                UnknownDoseDialog(
+                    useUnknownDoseAndNavigate = useUnknownDoseAndNavigate,
+                    dismiss = { isShowingUnknownDoseDialog = false }
+                )
+            }
+            if (administrationRoute == AdministrationRoute.INSUFFLATED) {
+                TextButton(onClick = navigateToSaferSniffingScreen) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = i18n("substance_info"),
+                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                    )
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(text = i18n("safer_sniffing_short"))
+                }
+            } else if (administrationRoute == AdministrationRoute.RECTAL) {
+                TextButton(onClick = {
+                    navigateToURL(AdministrationRoute.SAFER_PLUGGING_ARTICLE_URL)
+                }) {
+                    Icon(
+                        Icons.Outlined.Newspaper,
+                        contentDescription = i18n("common_open_link")
+                    )
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(i18n("safer_plugging"))
+                }
+            }
+            if (roaDose?.shouldUseVolumetricDosing == true) {
+                TextButton(onClick = navigateToVolumetricDosingScreen) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = i18n("substance_info"),
+                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                    )
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(text = i18n("dose_guide_volumetric_title"))
+                }
+            }
+            if (administrationRoute == AdministrationRoute.SMOKED && substanceName != "Cannabis") {
+                ElevatedCard(
+                    modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 4.dp)
+                ) {
+                    ChasingTheDragonText(
+                        modifier = Modifier.padding(
+                            horizontal = horizontalPadding,
+                            vertical = 10.dp
+                        )
+                    )
+                }
+            }
+        }
+    }
+}

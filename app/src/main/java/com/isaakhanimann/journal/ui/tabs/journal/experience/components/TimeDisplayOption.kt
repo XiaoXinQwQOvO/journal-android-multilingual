@@ -1,0 +1,51 @@
+/*
+ * Copyright (c) 2023. Isaak Hanimann.
+ * This file is part of PsychonautWiki Journal.
+ *
+ * PsychonautWiki Journal is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at
+ * your option) any later version.
+ *
+ * PsychonautWiki Journal is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with PsychonautWiki Journal.  If not, see https://www.gnu.org/licenses/gpl-3.0.en.html.
+ */
+
+package com.isaakhanimann.journal.ui.tabs.journal.experience.components
+
+import android.content.Context
+import com.isaakhanimann.journal.localization.I18n
+
+enum class SavedTimeDisplayOption {
+    AUTO {
+        override fun getTranslatedText(context: Context): String =
+            I18n.translate(context, "time_display_auto")
+    },
+    RELATIVE_TO_NOW {
+        override fun getTranslatedText(context: Context): String =
+            I18n.translate(context, "journal_time_relative_to_now")
+    },
+    RELATIVE_TO_START {
+        override fun getTranslatedText(context: Context): String =
+            I18n.translate(context, "time_display_relative_start")
+    },
+    TIME_BETWEEN {
+        override fun getTranslatedText(context: Context): String =
+            I18n.translate(context, "time_between")
+    },
+    REGULAR {
+        override fun getTranslatedText(context: Context): String =
+            I18n.translate(context, "journal_regular_time")
+    };
+
+    abstract fun getTranslatedText(context: Context): String
+}
+
+enum class TimeDisplayOption {
+    RELATIVE_TO_NOW, RELATIVE_TO_START, TIME_BETWEEN, REGULAR;
+}

@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "almost immediately after ingestion",
+    "half": "5-7 days",
+    "zero": "14 days",
+    "halfToleranceInHours": 144,
+    "zeroToleranceInHours": 336
+  },
+  "addictionPotential": "not habit-forming",
+  "toxicities": ["toxic dose is unknown"],
+  "summary": "A very rare lysergamide that is slightly less potent than LSD, yet with a shorter duration of action.",
+  "localizedName": "PRO-LAD"
+}

@@ -1,0 +1,12 @@
+{
+  "tolerance": {
+    "full": "摄入后几乎立即",
+    "half": "3天",
+    "zero": "7天",
+    "halfToleranceInHours": 72,
+    "zeroToleranceInHours": 168
+  },
+  "addictionPotential": "无成瘾性",
+  "toxicities": ["毒性剂量未知"],
+  "localizedName": "MPT"
+}

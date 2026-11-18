@@ -1,0 +1,12 @@
+{
+  "tolerance": {
+    "full": "摄入后几乎立即",
+    "half": "5-7天",
+    "zero": "14天",
+    "halfToleranceInHours": 144,
+    "zeroToleranceInHours": 336
+  },
+  "addictionPotential": "滥用和依赖的可能性较低",
+  "toxicities": ["毒性剂量未知"],
+  "localizedName": "MiPLA"
+}

@@ -1,0 +1,12 @@
+{
+  "tolerance": {
+    "full": "长期反复使用后形成",
+    "half": "2 - 4天",
+    "zero": "1 - 1.5 周",
+    "halfToleranceInHours": 72,
+    "zeroToleranceInHours": 210
+  },
+  "addictionPotential": "中度成瘾，具有较高的滥用潜力",
+  "toxicities": [],
+  "localizedName": "二氯帕烷"
+}

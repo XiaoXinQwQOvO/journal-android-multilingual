@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "摄入后几乎立即",
+    "half": "3天",
+    "zero": "7天",
+    "halfToleranceInHours": 72,
+    "zeroToleranceInHours": 168
+  },
+  "addictionPotential": "无成瘾性",
+  "toxicities": [],
+  "summary": "一种相对罕见的致幻性苯乙胺类物质，可能具有单胺氧化酶抑制剂（MAOI）作用。药效持久，且剂量反应曲线难以预测。与多数物质联用时安全性存疑。",
+  "localizedName": "2C-T-7"
+}

@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "develops with prolonged and repeated use",
+    "half": "3 - 7 days",
+    "zero": "1 - 2 weeks",
+    "halfToleranceInHours": 120,
+    "zeroToleranceInHours": 252
+  },
+  "addictionPotential": "moderately addictive with a high potential for abuse",
+  "toxicities": ["exact toxic dosage is unknown"],
+  "summary": "A dissociative drug which is less potent and less confusing than MXE but with otherwise similar properties. Reported as causing light stimulant effects at lower doses.",
+  "localizedName": "Ephenidine"
+}

@@ -1,0 +1,16 @@
+*.iml
+.gradle
+/local.properties
+.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+release
+.alma-snapshots
+.workbuddy
+*.keystore.jks
+*.keystore
+keystore_b64.txt

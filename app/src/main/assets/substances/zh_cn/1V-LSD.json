@@ -1,0 +1,12 @@
+{
+  "tolerance": {
+    "full": "摄入后几乎立即",
+    "half": "5-7天",
+    "zero": "14天",
+    "halfToleranceInHours": 144,
+    "zeroToleranceInHours": 336
+  },
+  "addictionPotential": "非成瘾性，滥用潜力低",
+  "toxicities": ["相对于剂量而言毒性极低"],
+  "localizedName": "1V-LSD"
+}

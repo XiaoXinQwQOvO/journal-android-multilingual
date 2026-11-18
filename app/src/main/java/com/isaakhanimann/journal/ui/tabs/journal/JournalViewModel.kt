@@ -1,0 +1,224 @@
+/*
+ * Copyright (c) 2022-2023. Isaak Hanimann.
+ * This file is part of PsychonautWiki Journal.
+ *
+ * PsychonautWiki Journal is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at
+ * your option) any later version.
+ *
+ * PsychonautWiki Journal is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with PsychonautWiki Journal.  If not, see https://www.gnu.org/licenses/gpl-3.0.en.html.
+ */
+
+package com.isaakhanimann.journal.ui.tabs.journal
+
+import androidx.compose.runtime.mutableStateOf
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.isaakhanimann.journal.data.achievement.AchievementDefinition
+import com.isaakhanimann.journal.data.achievement.AchievementDefinitionsLoader
+import com.isaakhanimann.journal.data.achievement.AchievementEventBus
+import com.isaakhanimann.journal.data.room.experiences.ExperienceRepository
+import com.isaakhanimann.journal.data.substances.repositories.SearchRepository
+import com.isaakhanimann.journal.data.substances.repositories.SubstanceRepository
+import com.isaakhanimann.journal.ui.tabs.settings.combinations.UserPreferences
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+val IS_MIGRATED_0 = booleanPreferencesKey("is_migrated_0")
+val IS_MIGRATED_1 = booleanPreferencesKey("is_migrated_1")
+
+@HiltViewModel
+class JournalViewModel @Inject constructor(
+    val experienceRepo: ExperienceRepository,
+    val searchRepository: SearchRepository,
+    val substanceRepository: SubstanceRepository,
+    private val dataStore: DataStore<Preferences>,
+    private val userPreferences: UserPreferences,
+    achievementDefinitionsLoader: AchievementDefinitionsLoader
+) : ViewModel() {
+
+    val achievementDefinitions: List<AchievementDefinition> =
+        achievementDefinitionsLoader.definitions
+
+    val achievementsFlow: StateFlow<List<String>?> = userPreferences.achievementsFlow.stateIn(
+        initialValue = null,
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000)
+    )
+
+    fun addAchievement(achievement: String) {
+        viewModelScope.launch {
+            val added = userPreferences.addAchievement(achievement)
+            if (added) {
+                AchievementEventBus.send(achievement)
+            }
+        }
+    }
+
+    val ingestionsFlow = experienceRepo.getSortedIngestionsFlow().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val isTimeRelativeToNow = mutableStateOf(false)
+
+    fun onChangeRelative(isRelative: Boolean) {
+        isTimeRelativeToNow.value = isRelative
+    }
+
+    val isSearchEnabled = mutableStateOf(false)
+
+    val ownerUserNameFlow: StateFlow<String?> = userPreferences.ownerUserNameFlow.stateIn(
+        initialValue = null,
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000)
+    )
+
+    fun resetAddIngestionTimes() = viewModelScope.launch {
+        userPreferences.saveLastIngestionTimeOfExperience(null)
+        userPreferences.saveClonedIngestionTime(null)
+    }
+
+    fun maybeMigrate() {
+        viewModelScope.launch {
+            dataStore.edit { settings ->
+                if (settings[IS_MIGRATED_0] == null) {
+                    experienceRepo.migrateBenzydamine()
+                    settings[IS_MIGRATED_0] = true
+                }
+                if (settings[IS_MIGRATED_1] == null) {
+                    experienceRepo.migrateCannabisAndMushroomUnits()
+                    settings[IS_MIGRATED_1] = true
+                }
+            }
+        }
+    }
+
+    fun onChangeOfIsSearchEnabled(newValue: Boolean) {
+        if (newValue) {
+            isSearchEnabled.value = true
+        } else {
+            isSearchEnabled.value = false
+            viewModelScope.launch {
+                searchTextFlow.emit("")
+            }
+        }
+    }
+
+    val isFavoriteEnabledFlow = MutableStateFlow(false)
+
+    fun onChangeFavorite(isFavorite: Boolean) {
+        viewModelScope.launch {
+            isFavoriteEnabledFlow.emit(isFavorite)
+        }
+    }
+
+    val searchTextFlow = MutableStateFlow("")
+
+    fun search(newSearchText: String) {
+        viewModelScope.launch {
+            searchTextFlow.emit(newSearchText)
+        }
+    }
+
+    val experiences =
+        experienceRepo.getSortedExperienceWithIngestionsCompanionsAndRatingsFlow()
+            .combine(searchTextFlow) { experiencesWithIngestions, searchText ->
+                Pair(first = experiencesWithIngestions, second = searchText)
+            }
+            .combine(experienceRepo.getCustomSubstancesFlow()) { pair, customSubstances ->
+                Pair(first = pair, second = customSubstances)
+            }
+            .combine(isFavoriteEnabledFlow) { pair, isFavoriteEnabled ->
+                var experiencesWithIngestions = pair.first.first
+                val searchText = pair.first.second
+                val customSubstances = pair.second
+
+                if (isFavoriteEnabled) {
+                    // only favorites
+                    experiencesWithIngestions =
+                        experiencesWithIngestions.filter { it.experience.isFavorite }
+                }
+                if (searchText.isNotEmpty()) {
+                    // collect substances with matching names for each whitespace-separated term,
+                    // so multiple substances can be searched at once
+                    val searchTerms = splitSearchTerms(searchText)
+                    val matchingSubstances = searchTerms.flatMap { term ->
+                        searchRepository.getMatchingSubstances(
+                            searchText = term,
+                            filterCategories = emptyList(),
+                            recentlyUsedSubstanceNamesSorted = emptyList()
+                        ).map { it.substance.name }
+                    }.distinct() + customSubstances.map { it.name }.filter { name ->
+                        searchTerms.any { term -> name.contains(term, ignoreCase = true) }
+                    }
+
+                    // experience title, text or some consumed substance must contain the search
+                    // string, or the consumer, an ingestion note or a timed note needs to match
+                    experiencesWithIngestions = experiencesWithIngestions.filter {
+                        it.experience.title.contains(
+                            other = searchText,
+                            ignoreCase = true
+                        ) || it.ingestionsWithCompanions.any { ingestionWithCompanion ->
+                            val isSubstanceAMatch =
+                                matchingSubstances.any { name -> name == ingestionWithCompanion.substanceCompanion?.substanceName }
+                            val isConsumerAMatch =
+                                ingestionWithCompanion.ingestion.consumerName?.contains(
+                                    searchText,
+                                    ignoreCase = true
+                                )
+                                    ?: false
+                            val isNotesAMatch =
+                                ingestionWithCompanion.ingestion.notes?.contains(
+                                    searchText,
+                                    ignoreCase = true
+                                )
+                                    ?: false
+                            isSubstanceAMatch || isConsumerAMatch || isNotesAMatch
+                        } || it.timedNotes.any { timedNote ->
+                            timedNote.note.contains(
+                                other = searchText,
+                                ignoreCase = true
+                            )
+                        } || it.experience.text.contains(
+                            other = searchText,
+                            ignoreCase = true
+                        )
+                    }
+                }
+                return@combine experiencesWithIngestions
+            }
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                initialValue = emptyList(),
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000)
+            )
+}
+
+/**
+ * Splits a search query into individual terms so multiple substances can be searched at once
+ * (e.g. "LSD MDMA" matches experiences containing either substance).
+ */
+internal fun splitSearchTerms(searchText: String): List<String> =
+    searchText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }

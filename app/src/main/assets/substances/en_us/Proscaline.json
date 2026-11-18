@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "almost immediately after ingestion",
+    "half": "3 days",
+    "zero": "7 days",
+    "halfToleranceInHours": 72,
+    "zeroToleranceInHours": 168
+  },
+  "addictionPotential": "not habit-forming",
+  "toxicities": ["no negative health effects attributed to trying this drug"],
+  "summary": "A very uncommon psychedelic stimulant and phenethylamine and analogue on mescaline with similar effects. Roughly 5-7 times more potent than mescaline by weight.",
+  "localizedName": "Proscaline"
+}

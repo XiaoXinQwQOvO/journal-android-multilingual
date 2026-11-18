@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "长期反复使用后形成",
+    "half": "3 - 7天",
+    "zero": "1 - 2周",
+    "halfToleranceInHours": 120,
+    "zeroToleranceInHours": 252
+  },
+  "addictionPotential": "中度成瘾，具有较高的滥用潜力",
+  "toxicities": ["确切的中毒剂量未知"],
+  "summary": "与2-FMA密切相关的兴奋剂。推测其效力略低于前者。毒理学等方面几乎完全未知。请谨慎使用。",
+  "localizedName": "2-氟乙安非他明"
+}

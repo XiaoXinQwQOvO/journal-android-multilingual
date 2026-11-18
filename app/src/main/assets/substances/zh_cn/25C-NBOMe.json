@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "摄入后几乎立即",
+    "half": "7天",
+    "zero": "14天",
+    "halfToleranceInHours": 168,
+    "zeroToleranceInHours": 336
+  },
+  "addictionPotential": "无成瘾性",
+  "toxicities": ["大剂量服用可致命"],
+  "summary": "一种相对较新且流行的研究化学品。一种与2C-C相关的短效致幻剂，效果类似LSD，但视觉体验更强，思维影响较弱。常被误当作LSD出售。会引起身体不适，即使在常规剂量范围内也曾导致多起死亡案例。",
+  "localizedName": "25C-NBOMe"
+}

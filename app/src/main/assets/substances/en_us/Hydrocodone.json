@@ -1,0 +1,13 @@
+{
+  "tolerance": {
+    "full": "with prolonged use",
+    "half": "3 - 7 days",
+    "zero": "1 - 2 weeks",
+    "halfToleranceInHours": 120,
+    "zeroToleranceInHours": 252
+  },
+  "addictionPotential": "moderately addictive",
+  "toxicities": ["potentially fatal at heavy dosages"],
+  "summary": "A codeine-derived opioid generally unheard of outside the United States. Generally mild in effects, used as an analgesic and cough-supressant. Sometimes used recreationally.",
+  "localizedName": "Hydrocodone"
+}

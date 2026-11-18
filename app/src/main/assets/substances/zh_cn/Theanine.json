@@ -1,0 +1,12 @@
+{
+  "tolerance": {
+    "full": "长期反复使用后",
+    "half": "5天",
+    "zero": "10天",
+    "halfToleranceInHours": 120,
+    "zeroToleranceInHours": 240
+  },
+  "addictionPotential": "无成瘾性",
+  "toxicities": ["极低毒性"],
+  "localizedName": "茶氨酸"
+}
