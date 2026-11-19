@@ -82,6 +82,7 @@ data class PackDto(
     val registerName: String,
     val title: String,
     val description: String,
+    val author: String? = null,
     val officialLink: String? = null,
     val versionName: String,
     val versionCode: Int,

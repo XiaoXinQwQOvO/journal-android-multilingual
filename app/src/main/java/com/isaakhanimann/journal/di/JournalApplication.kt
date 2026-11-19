@@ -27,6 +27,7 @@ import androidx.work.WorkManager
 import com.isaakhanimann.journal.ui.notifications.Notifications
 import com.isaakhanimann.journal.ui.notifications.TimeCapsuleWorker
 import com.isaakhanimann.journal.data.room.experiences.ExperienceRepository
+import com.isaakhanimann.journal.data.network.TranslationSyncRepository
 import com.isaakhanimann.journal.data.sync.AutoUploadScheduler
 import com.isaakhanimann.journal.ui.tabs.settings.combinations.UserPreferences
 import com.isaakhanimann.journal.ui.utils.DateFormat
@@ -56,6 +57,9 @@ class JournalApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var autoUploadScheduler: AutoUploadScheduler
+
+    @Inject
+    lateinit var translationSyncRepository: TranslationSyncRepository
 
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -98,6 +102,9 @@ class JournalApplication : Application(), Configuration.Provider {
         }
         Notifications.createChannels(this)
         autoUploadScheduler.observe(applicationScope)
+        applicationScope.launch {
+            translationSyncRepository.sync()
+        }
         // Daily time-capsule check: "this day last year".
         val request = PeriodicWorkRequestBuilder<TimeCapsuleWorker>(1, TimeUnit.DAYS).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(

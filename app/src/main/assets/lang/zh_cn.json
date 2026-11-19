@@ -806,5 +806,6 @@
   "account_2fa_invalid_code": "验证码错误",
   "account_2fa_enabled": "两步验证已开启",
   "account_2fa_disabled": "两步验证已关闭",
+  "extension_store_author": "作者：{author}",
   "common_save": "保存"
 }

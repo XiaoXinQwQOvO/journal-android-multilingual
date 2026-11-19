@@ -149,6 +149,16 @@ fun ExtensionStoreScreen(
                             }
                             Column(Modifier.weight(1f)) {
                                 Text(pack.title, style = MaterialTheme.typography.titleMedium)
+                                if (!pack.author.isNullOrBlank()) {
+                                    Text(
+                                        i18n(
+                                            "extension_store_author",
+                                            mapOf("author" to pack.author)
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                                 Text(
                                     pack.description,
                                     style = MaterialTheme.typography.bodySmall,

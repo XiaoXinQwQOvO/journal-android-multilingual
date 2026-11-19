@@ -179,6 +179,7 @@ class AccountViewModel @Inject constructor(
                 .addCredentialOption(
                     GetPublicKeyCredentialOption(publicKeyJson(begin.options))
                 )
+                .setPreferImmediatelyAvailableCredentials(true)
                 .build()
             val credential = CredentialManager.create(activityContext)
                 .getCredential(activityContext, request)

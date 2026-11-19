@@ -124,6 +124,24 @@ object I18n {
                 }
             }
         }
+
+        if (filePath.startsWith("lang/")) {
+            val serverFile = java.io.File(
+                java.io.File(context.filesDir, "server_lang"),
+                filePath.removePrefix("lang/")
+            )
+            if (serverFile.exists()) {
+                try {
+                    val json = JSONObject(serverFile.readText())
+                    val keys = json.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        resultMap[key] = json.optString(key, "")
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
         return resultMap
     }
 }
