@@ -7,20 +7,14 @@ package com.isaakhanimann.journal.ui.tabs.settings
 
 import android.content.Context
 import android.net.Uri
-import android.os.Build
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.credentials.CreatePublicKeyCredentialRequest
-import androidx.credentials.CreatePublicKeyCredentialResponse
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetPublicKeyCredentialOption
-import androidx.credentials.PublicKeyCredential
-import androidx.credentials.exceptions.CreateCredentialException
-import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.isaakhanimann.journal.data.account.AvatarSyncService
+import com.isaakhanimann.journal.data.account.PasskeyClient
+import com.isaakhanimann.journal.data.account.PasskeyResult
+import com.isaakhanimann.journal.data.account.findActivity
 import com.isaakhanimann.journal.data.network.AccountRepository
 import com.isaakhanimann.journal.data.network.ApiException
 import com.isaakhanimann.journal.data.network.LoginResult
@@ -38,6 +32,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
 @HiltViewModel
@@ -45,6 +40,7 @@ class AccountViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val accountRepository: AccountRepository,
     private val avatarSyncService: AvatarSyncService,
+    private val passkeyClient: PasskeyClient,
     private val userPreferences: UserPreferences
 ) : ViewModel() {
 
@@ -171,47 +167,90 @@ class AccountViewModel @Inject constructor(
     }
 
     fun loginWithPasskey(activityContext: Context, username: String) {
-        val name = username.trim()
-        if (name.isEmpty()) return
+        val activity = activityContext.findActivity()
+        if (activity == null) {
+            showMessage(I18n.translate(context, "account_passkey_unavailable"))
+            return
+        }
+        // An empty username is fine: the native flow is usernameless, the system
+        // picker lists the passkeys stored for this RP and the server resolves the
+        // account from the chosen credential.
+        val trimmed = username.trim()
         busy {
-            val begin = accountRepository.passkeyLoginBegin(name)
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(
-                    GetPublicKeyCredentialOption(publicKeyJson(begin.options))
-                )
-                .setPreferImmediatelyAvailableCredentials(true)
-                .build()
-            val credential = CredentialManager.create(activityContext)
-                .getCredential(activityContext, request)
-            val publicKey = credential.credential as? PublicKeyCredential ?: run {
-                showMessage(I18n.translate(context, "account_passkey_unavailable"))
-                return@busy
+            val begin = accountRepository.passkeyLoginBegin(trimmed.ifEmpty { null })
+            when (val result = passkeyClient.getPasskey(activity, optionsJson(begin.options))) {
+                is PasskeyResult.Success -> {
+                    val user = accountRepository.passkeyLoginFinish(
+                        begin.challengeId,
+                        result.value.authenticationResponseJson
+                    )
+                    onAuthenticated(user)
+                }
+                else -> showPasskeyMessage(result, "account_passkey_sign_in_failed")
             }
-            val user = accountRepository.passkeyLoginFinish(
-                begin.challengeId,
-                publicKey.authenticationResponseJson
-            )
-            onAuthenticated(user)
         }
     }
 
     fun addPasskey(activityContext: Context) {
+        val activity = activityContext.findActivity()
+        if (activity == null) {
+            showMessage(I18n.translate(context, "account_passkey_unavailable"))
+            return
+        }
         busy {
             val begin = accountRepository.passkeyRegisterBegin()
-            val request = CreatePublicKeyCredentialRequest(publicKeyJson(begin.options))
-            val credential = CredentialManager.create(activityContext)
-                .createCredential(activityContext, request)
-            val publicKey = credential as? CreatePublicKeyCredentialResponse ?: run {
-                showMessage(I18n.translate(context, "account_passkey_unavailable"))
-                return@busy
+            when (val result = passkeyClient.createPasskey(activity, optionsJson(begin.options))) {
+                is PasskeyResult.Success -> {
+                    accountRepository.passkeyRegisterFinish(
+                        begin.challengeId,
+                        result.value.registrationResponseJson
+                    )
+                    showMessage(I18n.translate(context, "account_passkey_created"))
+                }
+                else -> showPasskeyMessage(
+                    result,
+                    "account_passkey_create_failed",
+                    noCredentialKey = "account_passkey_no_provider"
+                )
             }
-            accountRepository.passkeyRegisterFinish(
-                begin.challengeId,
-                publicKey.registrationResponseJson
-            )
-            showMessage(I18n.translate(context, "account_passkey_created"))
         }
     }
+
+    /** Passkeys need Android 9+ and a working credential provider. */
+    fun passkeySupported(): Boolean = passkeyClient.isPasskeySupported()
+
+    /**
+     * Turn a Credential Manager outcome into a specific message. Collapsing these
+     * into one string is what made the feature look "unsupported" on every
+     * failure, including the ones the user could fix. [noCredentialKey] differs
+     * between the login path (no passkey saved yet) and the create path (the
+     * provider refused to create one at all).
+     */
+    private fun showPasskeyMessage(
+        result: PasskeyResult<*>,
+        fallbackKey: String,
+        noCredentialKey: String = "account_passkey_none"
+    ) {
+        when (result) {
+            is PasskeyResult.Success -> return
+            PasskeyResult.Cancelled -> return
+            PasskeyResult.NoCredential -> showMessage(I18n.translate(context, noCredentialKey))
+            is PasskeyResult.NoProvider ->
+                showMessage(withDetail(I18n.translate(context, "account_passkey_no_provider"), result.detail))
+            is PasskeyResult.UnverifiedAppRequest ->
+                showMessage(withDetail(I18n.translate(context, "account_passkey_assetlinks"), result.detail))
+            PasskeyResult.NotSupported -> showMessage(I18n.translate(context, "account_passkey_unavailable"))
+            is PasskeyResult.Failure ->
+                showMessage(withDetail(I18n.translate(context, fallbackKey), result.detail))
+        }
+    }
+
+    /**
+     * Credential-provider error details are developer-facing but are the only
+     * way to tell *why* creation was refused, so append them to the snackbar.
+     */
+    private fun withDetail(text: String, detail: String?): String =
+        if (detail.isNullOrBlank()) text else "$text（$detail）"
 
     fun updateUsername(newUsername: String, oldUsername: String) {
         val name = newUsername.trim()
@@ -258,10 +297,6 @@ class AccountViewModel @Inject constructor(
             _isBusy.value = true
             try {
                 block()
-            } catch (e: GetCredentialException) {
-                showMessage(I18n.translate(context, "account_passkey_unavailable"))
-            } catch (e: CreateCredentialException) {
-                showMessage(I18n.translate(context, "account_passkey_unavailable"))
             } catch (e: Exception) {
                 showMessage(messageFor(e))
             } finally {
@@ -305,11 +340,11 @@ class AccountViewModel @Inject constructor(
     }
 
     /**
- * webauthn-rs returns `{"publicKey": {...}}`, while Credential Manager expects
- * the inner PublicKeyCredentialCreationOptions / RequestOptions object.
- */
-    private fun publicKeyJson(options: JsonObject): String =
-        ((options["publicKey"] as? JsonObject) ?: options).toString()
+     * Serialises the challenge `options` object back into the JSON string
+     * Credential Manager expects. `JsonObject.toString()` is already valid JSON;
+     * PasskeyClient unwraps webauthn-rs' `publicKey` envelope if it is present.
+     */
+    private fun optionsJson(options: JsonObject): String = options.toString()
 
     private fun messageFor(e: Exception): String {
         if (e is ApiException) {

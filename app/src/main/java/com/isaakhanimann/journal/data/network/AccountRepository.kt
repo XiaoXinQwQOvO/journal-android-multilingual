@@ -151,14 +151,27 @@ class AccountRepository @Inject constructor(
         )
     }
 
-    suspend fun passkeyLoginBegin(username: String): PasskeyBeginResponse {
+    /**
+     * Start a passkey login.
+     *
+     * Passing a username keeps the legacy username-first ceremony. Passing null
+     * (the native flow) asks for a *discoverable* challenge: the system
+     * credential picker shows every passkey stored for this RP and the account is
+     * resolved from the credential the user picks, so no username is needed.
+     */
+    suspend fun passkeyLoginBegin(username: String?): PasskeyBeginResponse {
+        val body = if (username == null) {
+            "{}"
+        } else {
+            api.json.encodeToString(
+                PasskeyLoginRequest.serializer(),
+                PasskeyLoginRequest(username)
+            )
+        }
         val response = api.sendJson(
             path = "auth/passkey/login/begin",
             method = "POST",
-            body = api.json.encodeToString(
-                PasskeyLoginRequest.serializer(),
-                PasskeyLoginRequest(username)
-            ),
+            body = body,
             authenticated = false
         )
         return api.json.decodeFromString(PasskeyBeginResponse.serializer(), response)

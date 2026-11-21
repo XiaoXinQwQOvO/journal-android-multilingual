@@ -33,4 +33,12 @@
     <string name="widget_config_title">Widget settings</string>
     <string name="widget_config_substance">Substance</string>
     <string name="widget_config_all_substances">All substances</string>
+    <!--
+      Digital Asset Links for native passkeys. The credential provider fetches
+      this file to check that the package name and signing certificate below
+      match the installed APK; if the fetch fails or the fingerprint differs,
+      passkey creation/login fail with "cannot verify incoming request".
+      Keep this URL in sync with ApiConfig.ORIGIN.
+    -->
+    <string name="asset_statements" translatable="false">[{\"include\": \"https://journal.xiaoxinww.xin/.well-known/assetlinks.json\"}]</string>
 </resources>

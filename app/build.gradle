@@ -138,6 +138,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.okhttp)
     implementation(libs.androidx.credentials)
+    // On Android 13 and lower Credential Manager is provided by Play Services
+    // rather than the framework, so this artifact is what actually shows the
+    // system credential picker there. Without it every create/get call fails
+    // with a provider-configuration exception.
+    implementation(libs.androidx.credentials.play.services.auth)
 
     testImplementation(libs.junit)
     testImplementation(libs.json.test)

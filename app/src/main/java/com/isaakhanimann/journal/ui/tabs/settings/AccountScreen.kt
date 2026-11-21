@@ -332,10 +332,10 @@ private fun AuthContent(
                 )
             }
         }
-        if (Build.VERSION.SDK_INT >= 34) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             TextButton(
                 onClick = { onPasskeyLogin(context, username) },
-                enabled = username.isNotBlank() && !isBusy,
+                enabled = !isBusy,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Outlined.Fingerprint, contentDescription = null)
@@ -494,7 +494,7 @@ private fun ProfileContent(
             }
         }
 
-        if (Build.VERSION.SDK_INT >= 34) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth()) {
                     TextButton(
@@ -537,7 +537,7 @@ private fun ProfileContent(
                 }
             }
         }
-        if (Build.VERSION.SDK_INT >= 34) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             Text(
                 i18n("account_passkey_hint"),
                 style = MaterialTheme.typography.bodySmall,

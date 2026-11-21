@@ -32,6 +32,15 @@
         android:roundIcon="@mipmap/ic_launcher_springwind"
         android:supportsRtl="true"
         android:theme="@style/Theme.App.Starting">
+        <!-- Digital Asset Links for the account server. The credential provider
+             (Google Password Manager) fetches this file and checks that the
+             package name and signing-certificate SHA-256 below match the
+             installed APK before it will create or return a passkey. Without it
+             Credential Manager fails with "cannot verify incoming request", even
+             when the server itself is configured correctly. -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
